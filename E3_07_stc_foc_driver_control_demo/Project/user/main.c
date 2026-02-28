@@ -71,8 +71,11 @@
 #define ENCODER_DIR_L      (IO_P53)                                            // 左电机编码器方向引脚定义
 #define ENCODER_COUNT_L    (TIM3_ENCOEDER_P04)                                 // 左电机编码器计数引脚定义
 #define WHEEL_BASE          10
+#define FILTER_COEFF       0.98f
+#define DT                 0.001f 
 //int8 duty = 0;                                                                 // 占空比变量，范围为 -MAX_DUTY ~ MAX_DUTY，正负表示方向
 //uint8 dir = 1;                                                                 // 方向标志位，0 表示占空比递减，1 表示占空比递增
+void IMU_Filter_Update(void);
 
 int16 right_encoder_data = 0;                                                  // 右电机编码器计数数据
 int16 left_encoder_data = 0;                                                   // 左电机编码器计数数据
@@ -104,14 +107,33 @@ PID_t pid_dir=
 	0,                                                          // 积分误差
 	100,                                                 // 输出最大值
 	-100                                                // 输出最小值
-};                                                                     
-																			 //双串级PID变量定义
-float error_dir = 0;                                                           // 方向误差
+};    
+PID_t pid_balance=
+{
+	0,                                                              // 目标值
+	0,                                                              // 实际值
+	0,                                                                 // 输出值
+	0.5,                                                               // 比例系数
+	0.1,                                                               // 积分系数
+	0.01,                                                              // 微分系数
+	0,                                                            // 当前误差
+	0,                                                            // 上一次误差
+	0,                                                          // 积分误差
+	100,                                                 // 输出最大值
+	-100                                                // 输出最小值
+};                                                                  
 
-unsigned char counter_dir = 0;                                                        // 方向计数器，用于控制PID外环定时更新计数
-unsigned char counter_speed = 0;                                                      // 速度计数器，用于控制PID内环定时更新计数
-unsigned char duty,speed_r,speed_l;                                                           // 占空比变量，范围为 -MAX_DUTY ~ MAX_DUTY，正负表示方向
-unsigned char base_speed = 20; // 基础速度
+float error_dir = 0;                                                           // 方向误差
+float pitch_angle = 0;														  // 车身倾角
+float pitch_rate = 0;															  // 车身倾角角速度
+
+unsigned char counter_dir = 0;                                                        // 方向计数器，用于控制PID最外环定时更新计数
+unsigned char counter_speed = 0;                                                      // 速度计数器，用于控制PID中环定时更新计数
+unsigned char counter_balance = 0;                                                       // 平衡计数器，用于控制平衡PID内环定时更新计数
+unsigned char speed_r,speed_l,speed_diff;                                                           // 占空比变量，范围为 -MAX_DUTY ~ MAX_DUTY，正负表示方向
+unsigned char speed_average = 0; // 速度平均值，用于方向控制的输入
+unsigned char speed_target = 0; // 速度目标值，用于速度 PID 的目标值
+unsigned char speed_out = 0; // 速度最终输出值，用于调整基础速度
 
 void main()
 {
@@ -140,6 +162,8 @@ void main()
 	// 此处编写用户代码 例如外设初始化代码等
 	pit_init(TIM_0, 1);
 	system_init();
+	if(imu660rb_init())
+            printf("\r\nIMU660RB init error."); 
 	
     while(1)
     {
@@ -149,47 +173,7 @@ void main()
 		//get_encoder();
 		//滤波，计算
 		//得到error_dir
-		
 
-
-
-
-
-		// if(duty >= 0)                                                          			// 当占空比为非负数时，电机正转
-        // {
-        //     pwm_set_duty(PWM_L, duty * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));     // 计算并输出占空比（加上 10% 信号死区）
-        //     gpio_set_level(DIR_L, 0);                                          			// 输出电机旋转方向信号
-
-        //     pwm_set_duty(PWM_R, duty * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));     // 计算并输出占空比（加上 10% 信号死区）
-        //     gpio_set_level(DIR_R, 0);                                          			// 输出电机旋转方向信号
-        // }
-        // else                                                                   			// 电机反转
-        // {
-        //     pwm_set_duty(PWM_L, (-duty) * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));  // 计算并输出占空比（加上 10% 信号死区）
-		// 	gpio_set_level(DIR_L, 1);                                          			// 输出电机旋转方向信号
-
-        //     pwm_set_duty(PWM_R, (-duty) * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));  // 计算并输出占空比（加上 10% 信号死区）
-		// 	gpio_set_level(DIR_R, 1);                                          			// 输出电机旋转方向信号
-        // }
-		
-		
-        // if(dir)                                                                 		// 当方向标志为 1 时，占空比递增（加速）
-        // {		
-        //     duty ++;                                                            		// 正向计数
-        //     if(duty >= MAX_DUTY)                                                		// 达到最大值
-        //     {		
-		// 		dir = 0;                                                    			// 改变方向标志，后续占空比将递减
-		// 	}
-        // }
-        // else																			// 当方向标志为 0 时，占空比递减（减速至反转）
-        // {
-        //     duty --;                                                            		// 反向计数
-        //     if(duty <= -MAX_DUTY)                                               		// 达到最小值
-        //     {
-		// 		dir = 1;                                                     			// 改变方向标志，后续占空比将递增
-		// 	}
-        // }
-		
 		// right_encoder_data = encoder_get_count(ENCODER_R);	                    		// 获取右电机编码器计数数据
 		// left_encoder_data  = encoder_get_count(ENCODER_L);	                    		// 获取左电机编码器计数数据
 		
@@ -210,37 +194,78 @@ void PID_calculate()
 {
 	counter_dir++;
 	counter_speed++;
+	
+	                                       			
+	if(counter_balance >= 1) // 每 1 次中断更新一次平衡 PID
+	{
+		counter_balance = 0;            // 重置计数器
+		imu660rb_get_acc();                                                         // 获取 IMU660RB 的加速度测量数值
+ 	    imu660rb_get_gyro();                                                        // 获取 IMU660RB 的角速度测量数值
+		IMU_Filter_Update();                                                        // 更新 IMU 互补滤波，计算车身倾角
+		pid_balance.actual = pitch_angle; // 设置实际值为车身倾角
+		pid_balance.out = - pid_balance.Kp * (pid_balance.target - pid_balance.actual) - pid_balance.Kd * pitch_rate; // 计算平衡 PID 输出
+		speed_out = pid_balance.out; // 将平衡 PID 输出调整基础速度，以保持车身平衡
+		speed_r = speed_out + speed_diff; // 计算右轮速度
+		speed_l = speed_out - speed_diff; // 计算左轮速度
+		if(speed_l > 0) // 如果速度为正，表示前进
+		{
+			pwm_set_duty(PWM_L, speed_l * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));     // 计算并输出占空比（加上 10% 信号死区）
+        gpio_set_level(DIR_L, 0);                                          			// 输出电机旋转方向信号
+
+		}
+		else 
+		{
+			pwm_set_duty(PWM_L, (-speed_l) * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));  // 计算并输出占空比（加上 10% 信号死区）
+			gpio_set_level(DIR_L, 1);                                          			// 输出电机旋转方向信号
+		}
+		if(speed_r > 0) // 如果速度为正，表示前进
+		{
+			pwm_set_duty(PWM_R, speed_r * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));     // 计算并输出占空比（加上 10% 信号死区）
+			gpio_set_level(DIR_R, 0);                                          			// 输出电机旋转方向信号
+		}
+		else 
+		{
+			pwm_set_duty(PWM_R, (-speed_r) * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));  // 计算并输出占空比（加上 10% 信号死区）
+			gpio_set_level(DIR_R, 1);                                          			// 输出电机旋转方向信号
+		}
+	}
+
+	if(counter_speed >= 2) // 每 2 次中断更新一次速度 PID
+	{
+		counter_speed = 0;            // 重置计数器
+		right_encoder_data = encoder_get_count(ENCODER_R);	                    		// 获取右电机编码器计数数据
+		left_encoder_data  = encoder_get_count(ENCODER_L);	                    		// 获取左电机编码器计数数据
+		
+		encoder_clear_count(ENCODER_R);	                                    			// 清零右电机编码器计数
+		encoder_clear_count(ENCODER_L);                                       			// 清零左电机编码器计数
+
+		speed_average = (right_encoder_data + left_encoder_data) / 2; // 计算左右轮平均速度，作为方向控制的输入
+		pid_speed.target = speed_target; // 设置速度目标值
+		pid_speed.actual = speed_average; // 设置实际值为平均速度
+		PID_update(&pid_speed); // 更新速度 PID，计算输出
+		pid_balance.target = pid_speed.out; // 将速度 PID 输出作为基础速度
+	}
+	
 	if(counter_dir >= 5) // 每 5 次中断更新一次方向 PID
 	{
 		counter_dir = 0;            // 重置计数器
 		pid_dir.actual = error_dir; // 设置实际值为方向误差
 		PID_update(&pid_dir);
-		pid_speed.target = pid_dir.out; // 将方向 PID 输出作为速度 PID 的目标值
+		speed_diff = pid_dir.out; // 将方向 PID 输出作为左右轮速度差
 	}
-	if(counter_speed >= 2) // 每 2 次中断更新一次速度 PID
-	{
-		counter_speed = 0;            // 重置计数器
-		pid_speed.actual = (encoder_get_count(ENCODER_R) - encoder_get_count(ENCODER_L)) / WHEEL_BASE; // 设置实际值为左右电机编码器计数的平均值
-		PID_update(&pid_speed);
-		duty = (unsigned char)pid_speed.out; // 获取速度 PID 输出作为两轮速度差
-		speed_r = base_speed + duty; // 计算右轮速度
-		speed_l = base_speed - duty; // 计算左轮速度
-		if(duty > 0){
-			pwm_set_duty(PWM_L, speed_l * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));     // 计算并输出占空比（加上 10% 信号死区）
-        gpio_set_level(DIR_L, 0);                                          			// 输出电机旋转方向信号
+	
+}
 
-        pwm_set_duty(PWM_R, speed_r * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));     // 计算并输出占空比（加上 10% 信号死区）
-        gpio_set_level(DIR_R, 0); // 输出电机旋转方向信号
-		}
-		else //应该用不上
-		{
-			pwm_set_duty(PWM_L, (-duty) * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));  // 计算并输出占空比（加上 10% 信号死区）
-			gpio_set_level(DIR_L, 1);                                          			// 输出电机旋转方向信号
+void IMU_Filter_Update(void)
+{
+    
+    // 从加速度计算倾角 (单位: 度)
+    float acc_angle = atan2(-imu660rb_acc_x, imu660rb_acc_z) * 57.29578f; // 57.29578 = 180/PI, 弧度转度
 
-			pwm_set_duty(PWM_R, (-duty) * (PWM_DUTY_MAX / 100) + (PWM_DUTY_MAX / 10));  // 计算并输出占空比（加上 10% 信号死区）
-			gpio_set_level(DIR_R, 1);                                          			// 输出电机旋转方向信号
-		}                                       			
-	}
+    // 3. 互补滤波核心公式
+    pitch_rate = imu660rb_gyro_y; // 角速度直接用于D项
+    pitch_angle = FILTER_COEFF * (pitch_angle + imu660rb_gyro_y * DT) + (1.0f - FILTER_COEFF) * acc_angle;
+    // 公式解释: 用陀螺仪积分预测角度，再用加速度计角度进行微量修正
 }
 // *************************** 例程常见问题说明 ***************************
 // 遇到问题时请按照以下问题检查列表检查
