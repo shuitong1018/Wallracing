@@ -1,0 +1,77 @@
+C251 COMPILER V5.60.0,  motor                                                              25/02/26  13:17:02  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE motor
+OBJECT MODULE PLACED IN .\out_file\motor.obj
+COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE motor.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\.
+                    -.\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code)
+                    - DEBUG PRINT(.\out_file\motor.lst) OBJECT(.\out_file\motor.obj) 
+
+stmt  level    source
+
+    1          #include "motor.h"
+    2          
+    3          void Motor_Init(void) {
+    4   1          // 1. 设置P2.0-P2.1为推挽输出
+    5   1          P2M1 &= ~0x03;
+    6   1          P2M0 |= 0x03;
+    7   1          
+    8   1          // 2. 配置PWM
+    9   1          PWMA_ENO = 0x00;
+   10   1          PWMA_PS = 0x00;     // PWM输出到P2.0, P2.1
+   11   1          
+   12   1          // 3. 配置PWM通道
+   13   1          PWMA_CCER1 = 0x00;
+   14   1          PWMA_CCMR1 = 0x60;  // PWM1输出模式
+   15   1          PWMA_CCMR2 = 0x60;  // PWM2输出模式
+   16   1          
+   17   1          // 4. 使能PWM输出
+   18   1          PWMA_CCER1 |= 0x01;  // 使能PWM1
+   19   1          PWMA_CCER1 |= 0x10;  // 使能PWM2
+   20   1          PWMA_ENO |= 0x03;    // 使能IO输出
+   21   1          
+   22   1          // 5. 设置PWM频率（20KHz）
+   23   1          PWMA_PSCR = 24 - 1;  // 预分频
+*** ERROR C67 IN LINE 23 OF motor.c: 'PWMA_PSCR': undefined identifier
+   24   1          PWMA_ARR = 255;      // 自动重装值（0-255）
+*** ERROR C67 IN LINE 24 OF motor.c: 'PWMA_ARR': undefined identifier
+   25   1          PWMA_CR1 |= 0x01;    // 使能计数器
+   26   1      }
+   27          
+   28          void Motor_Control(int base_speed, int speed_diff) {
+   29   1          int left_speed, right_speed;
+   30   1          int left_dir = 1, right_dir = 1;
+   31   1          
+   32   1          // set_pwm (left, 负速度 + target_seed_diff)
+   33   1          // right, base_seed - target_seed_diff
+   34   1          left_speed = base_speed - speed_diff;
+   35   1          right_speed = base_speed + speed_diff;
+   36   1          
+   37   1          // 方向处理（如果速度为负，则反转）
+   38   1          if(left_speed < 0) {
+   39   2              left_speed = -left_speed;
+   40   2              left_dir = 0;
+   41   2          }
+   42   1          if(right_speed < 0) {
+   43   2              right_speed = -right_speed;
+   44   2              right_dir = 0;
+   45   2          }
+   46   1          
+   47   1          // 速度限幅
+   48   1          if(left_speed > 255) left_speed = 255;
+   49   1          if(right_speed > 255) right_speed = 255;
+   50   1          
+   51   1          // 设置方向
+   52   1          LEFT_MOTOR_DIR_PIN = left_dir;
+   53   1          RIGHT_MOTOR_DIR_PIN = right_dir;
+   54   1          
+   55   1          // 设置PWM占空比
+C251 COMPILER V5.60.0,  motor                                                              25/02/26  13:17:02  PAGE 2   
+
+   56   1          PWMA_CCR1 = left_speed;
+*** ERROR C67 IN LINE 56 OF motor.c: 'PWMA_CCR1': undefined identifier
+   57   1          PWMA_CCR2 = right_speed;
+*** ERROR C67 IN LINE 57 OF motor.c: 'PWMA_CCR2': undefined identifier
+   58   1      }
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  4 ERROR(S)

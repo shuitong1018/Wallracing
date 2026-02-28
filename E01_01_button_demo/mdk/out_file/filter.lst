@@ -1,0 +1,127 @@
+C251 COMPILER V5.60.0,  filter                                                             25/02/26  13:17:02  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE filter
+OBJECT MODULE PLACED IN .\out_file\filter.obj
+COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE filter.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\
+                    -..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code
+                    -) DEBUG PRINT(.\out_file\filter.lst) OBJECT(.\out_file\filter.obj) 
+
+stmt  level    source
+
+    1          #include "filter.h"
+    2          #include <stdio.h>
+    3          #include <stdlib.h>
+    4          
+    5          int L1_filt, L2_filt, L3_filt, L4_filt;
+    6          
+    7          // 历史数据缓存
+    8          static u16 history[4][FILTER_WINDOW_SIZE] = {0};
+*** ERROR C142 IN LINE 8 OF filter.c: illegal initialization
+    9          static u8 index = 0;
+*** ERROR C29 IN LINE 9 OF filter.c: formal/parameter has illegal storage class
+*** ERROR C33 IN LINE 9 OF filter.c: 'u8': invalid storage class
+*** ERROR C25 IN LINE 9 OF filter.c: syntax error near 'index'
+   10          
+   11          // 突变检测阈值（如果新值与上次滤波值的差值超过此值，认为是突变）
+   12          #define MUTATION_THRESHOLD 200
+   13          
+   14          // 上一次的滤波值，用于突变检测
+   15          static int last_filt[4] = {0, 0, 0, 0};
+*** ERROR C29 IN LINE 15 OF filter.c: formal/parameter has illegal storage class
+   16          
+   17          void Filter_Init(void) {
+*** ERROR C42 IN LINE 17 OF filter.c: 'Filter_Init': not in formal parameter list
+*** ERROR C25 IN LINE 17 OF filter.c: syntax error near '{'
+   18              // 清空历史数据
+   19              for(int i = 0; i < 4; i++) {
+   20                  for(int j = 0; j < FILTER_WINDOW_SIZE; j++) {
+   21                      history[i][j] = 0;
+   22                  }
+   23                  last_filt[i] = 0;
+   24              }
+   25              index = 0;
+   26          }
+   27          
+   28          // 冒泡排序（用于中值滤波）
+   29          void Sort_Array(int arr[], int size) {
+   30              for(int i = 0; i < size-1; i++) {
+   31                  for(int j = 0; j < size-1-i; j++) {
+   32                      if(arr[j] > arr[j+1]) {
+   33                          int temp = arr[j];
+   34                          arr[j] = arr[j+1];
+   35                          arr[j+1] = temp;
+   36                      }
+   37                  }
+   38              }
+   39          }
+   40          int Comprehensive_Filter(int new_value, int sensor_index) {
+   41              int limited_value;
+   42              int temp_buffer[FILTER_WINDOW_SIZE];
+   43              
+   44              // 1. 第一步：限幅滤波（去除瞬间大跳变）
+   45              if(abs(new_value - last_filt[sensor_index]) > MUTATION_THRESHOLD) {
+   46                  limited_value = last_filt[sensor_index];
+   47              } else {
+   48                  limited_value = new_value;
+   49              }
+   50              
+C251 COMPILER V5.60.0,  filter                                                             25/02/26  13:17:02  PAGE 2   
+
+   51              // 2. 更新历史数据（使用限幅后的值）
+   52              history[sensor_index][index] = limited_value;
+   53              
+   54              // 3. 第二步：中值滤波（去除脉冲噪声）
+   55              for(int i = 0; i < FILTER_WINDOW_SIZE; i++) {
+   56                  temp_buffer[i] = history[sensor_index][i];
+   57              }
+   58              Sort_Array(temp_buffer, FILTER_WINDOW_SIZE);
+   59              
+   60              // 4. 去掉最小值和最大值，对中间的值求平均
+   61              u32 sum = 0;
+   62              for(int i = 1; i < FILTER_WINDOW_SIZE-1; i++) {
+   63                  sum += temp_buffer[i];
+   64              }
+   65              int filtered_value = sum / (FILTER_WINDOW_SIZE - 2);
+   66              
+   67              // 5. 保存本次滤波值
+   68              last_filt[sensor_index] = filtered_value;
+   69              
+   70              return filtered_value;
+   71          }
+   72          // 主滤波函数
+   73          void Filter_Process(int raw_L1, int raw_L2, int raw_L3, int raw_L4) {
+   74              
+   75              L1_filt = Comprehensive_Filter(raw_L1, 0);
+   76              L2_filt = Comprehensive_Filter(raw_L2, 1);
+   77              L3_filt = Comprehensive_Filter(raw_L3, 2);
+   78              L4_filt = Comprehensive_Filter(raw_L4, 3);
+   79              
+   80              // 更新索引（必须在所有传感器处理完成后）
+   81              index = (index + 1) % FILTER_WINDOW_SIZE;
+   82              
+   83              // 打印滤波后的值（调试用）
+   84              // printf("L1:%d L2:%d L3:%d L4:%d\n", L1_filt, L2_filt, L3_filt, L4_filt);
+   85          }
+   86          
+   87          // 如果需要单独获取某个传感器的滤波值
+   88          int Get_Filtered_Value(int sensor_index) {
+   89              switch(sensor_index) {
+   90                  case 0: return L1_filt;
+   91                  case 1: return L2_filt;
+   92                  case 2: return L3_filt;
+   93                  case 3: return L4_filt;
+   94                  default: return 0;
+   95              }
+   96          }
+   97          
+   98          // 突变检测函数（返回是否有突变）
+   99          int Check_Mutation(int new_value, int sensor_index) {
+  100              if(abs(new_value - last_filt[sensor_index]) > MUTATION_THRESHOLD) {
+  101                  return 1;  // 有突变
+  102              }
+  103              return 0;  // 无突变
+  104          }
+*** ERROR C7 IN LINE 104 OF filter.c: compilation aborted
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  8 ERROR(S)

@@ -1,0 +1,56 @@
+C251 COMPILER V5.60.0,  path                                                               25/02/26  13:17:02  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE path
+OBJECT MODULE PLACED IN .\out_file\path.obj
+COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE path.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\..
+                    -\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code) 
+                    -DEBUG PRINT(.\out_file\path.lst) OBJECT(.\out_file\path.obj) 
+
+stmt  level    source
+
+    1          #include "path.h"
+    2          #include <stdlib.h>
+    3          
+    4          void Path_Init(void) {
+    5   1          // 无需初始化
+    6   1      }
+    7          
+    8          PathType_t Path_Detect(int L1, int L2, int L3, int L4) {
+    9   1          // 判断是否平地（所有传感器都检测不到黑线）
+   10   1          if(L1 < 100 && L2 < 100 && L3 < 100 && L4 < 100) {
+   11   2              return PATH_FLAT;
+   12   2          }
+   13   1          
+   14   1          // 判断是否直角弯（L1和L4差值大）
+   15   1          if(abs(L1 - L4) > 500) {
+   16   2              return PATH_RIGHT_ANGLE;
+   17   2          }
+   18   1          
+   19   1          // 默认是直道
+   20   1          return PATH_STRAIGHT;
+   21   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =       121     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =         8     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =    ------     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
