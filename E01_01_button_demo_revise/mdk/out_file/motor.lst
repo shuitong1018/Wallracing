@@ -1,0 +1,111 @@
+C251 COMPILER V5.60.0,  motor                                                              01/03/26  18:13:44  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE motor
+OBJECT MODULE PLACED IN .\out_file\motor.obj
+COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE motor.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\.
+                    -.\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code)
+                    - DEBUG PRINT(.\out_file\motor.lst) OBJECT(.\out_file\motor.obj) 
+
+stmt  level    source
+
+    1          #include "motor.h"
+    2          #include "zf_driver_gpio.h"
+    3          #include "zf_driver_pwm.h"
+    4          
+    5          void Motor_Init(void)
+    6          {
+    7   1          // 方向引脚初始化 - gpio_init需要4个参数
+    8   1          gpio_init(IO_P21, GPO, 1, GPO_PUSH_PULL);   // 左电机方向，初始高电平，推挽输出
+    9   1          gpio_init(IO_P23, GPO, 1, GPO_PUSH_PULL);   // 右电机方向，初始高电平，推挽输出
+   10   1          
+   11   1          // PWM初始化 - 使用正确的PWM通道枚举
+   12   1          // 左电机使用PWMA_CH1P_P20 (P20输出PWM)
+   13   1          pwm_init(PWMA_CH1P_P20, 20000, 0);  // 20kHz，初始占空比0
+   14   1          
+   15   1          // 右电机使用PWMA_CH2P_P22 (P22输出PWM)
+   16   1          pwm_init(PWMA_CH2P_P22, 20000, 0);  // 20kHz，初始占空比0
+   17   1      }
+   18          
+   19          void Motor_SetLeft(int speed)
+   20          {
+   21   1          uint8 dir = 1;
+   22   1          uint32 pwm_value;
+   23   1          
+   24   1          // 速度限幅 (PWM范围0-10000，因为PWM_DUTY_MAX=10000)
+   25   1          if(speed > MOTOR_SPEED_MAX) speed = MOTOR_SPEED_MAX;
+   26   1          if(speed < -MOTOR_SPEED_MAX) speed = -MOTOR_SPEED_MAX;
+   27   1          
+   28   1          // 方向处理
+   29   1          if(speed >= 0) {
+   30   2              dir = 1;                        // 正转
+   31   2              // 将0-255的速度映射到0-10000
+   32   2              pwm_value = (uint32)speed * (PWM_DUTY_MAX / MOTOR_SPEED_MAX);
+   33   2          } else {
+   34   2              dir = 0;                        // 反转
+   35   2              pwm_value = (uint32)(-speed) * (PWM_DUTY_MAX / MOTOR_SPEED_MAX);
+   36   2          }
+   37   1          
+   38   1          gpio_set_level(IO_P21, dir);                 // 设置方向
+   39   1          pwm_set_duty(PWMA_CH1P_P20, pwm_value);      // 设置PWM占空比
+   40   1      }
+   41          
+   42          void Motor_SetRight(int speed)
+   43          {
+   44   1          uint8 dir = 1;
+   45   1          uint32 pwm_value;
+   46   1          
+   47   1          if(speed > MOTOR_SPEED_MAX) speed = MOTOR_SPEED_MAX;
+   48   1          if(speed < -MOTOR_SPEED_MAX) speed = -MOTOR_SPEED_MAX;
+   49   1          
+   50   1          if(speed >= 0) {
+   51   2              dir = 1;
+   52   2              pwm_value = (uint32)speed * (PWM_DUTY_MAX / MOTOR_SPEED_MAX);
+   53   2          } else {
+   54   2              dir = 0;
+   55   2              pwm_value = (uint32)(-speed) * (PWM_DUTY_MAX / MOTOR_SPEED_MAX);
+   56   2          }
+   57   1          
+C251 COMPILER V5.60.0,  motor                                                              01/03/26  18:13:44  PAGE 2   
+
+   58   1          gpio_set_level(IO_P23, dir);                 // 设置方向
+   59   1          pwm_set_duty(PWMA_CH2P_P22, pwm_value);      // 设置PWM占空比
+   60   1      }
+   61          
+   62          void Motor_Control(int left_speed, int right_speed)
+   63          {
+   64   1          Motor_SetLeft(left_speed);
+   65   1          Motor_SetRight(right_speed);
+   66   1      }
+   67          
+   68          void Motor_Stop(void)
+   69          {
+   70   1          pwm_set_duty(PWMA_CH1P_P20, 0);
+   71   1          pwm_set_duty(PWMA_CH2P_P22, 0);
+   72   1          gpio_set_level(IO_P21, 1);
+   73   1          gpio_set_level(IO_P23, 1);
+   74   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =       477     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =        18     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =    ------     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

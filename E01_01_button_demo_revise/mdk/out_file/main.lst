@@ -1,0 +1,173 @@
+C251 COMPILER V5.60.0,  main                                                               01/03/26  18:13:45  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE main
+OBJECT MODULE PLACED IN .\out_file\main.obj
+COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE main.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\..
+                    -\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code) 
+                    -DEBUG PRINT(.\out_file\main.lst) OBJECT(.\out_file\main.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_typedef.h"
+    2          #include "zf_common_clock.h"
+    3          #include "zf_common_debug.h"
+    4          #include "zf_common_interrupt.h"
+    5          #include "zf_driver_delay.h"
+    6          #include "zf_driver_adc.h"
+    7          #include "zf_driver_gpio.h"
+    8          #include "zf_driver_pwm.h"
+    9          #include "zf_driver_uart.h"
+   10          
+   11          #include "config.h"
+   12          #include "sensor.h"
+   13          #include "filter.h"
+   14          #include "path.h"
+   15          #include "motor.h"
+   16          #include "error.h"
+   17          
+   18          // 全局变量
+   19          int base_speed = BASE_SPEED_NORMAL;
+   20          int target_speed_diff = 0;
+   21          int error_value = 0;
+   22          
+   23          
+   24          extern int L1, L2, L3, L4;           // 定义在 sensor.c
+   25          extern int L1_filt, L2_filt, L3_filt, L4_filt;  // 定义在 filter.c
+   26          
+   27          //-------------------------------------------------------------------------------------------------------
+             -------------
+   28          // 系统初始化
+   29          //-------------------------------------------------------------------------------------------------------
+             -------------
+   30          void System_Init(void)
+   31          {
+   32   1          // 逐飞库必须的初始化
+   33   1          clock_init(SYSTEM_CLOCK_30M);      // 系统时钟初始化为30MHz
+   34   1          debug_init();                        // 调试串口初始化
+   35   1          
+   36   1          // 各模块初始化
+   37   1          Sensor_Init();
+   38   1          Filter_Init();
+   39   1          Path_Init();
+   40   1          Motor_Init();
+   41   1          
+   42   1          system_delay_ms(100);                // 使用逐飞库的延时函数
+   43   1      }
+   44          
+   45          //-------------------------------------------------------------------------------------------------------
+             -------------
+   46          // 主函数
+   47          //-------------------------------------------------------------------------------------------------------
+             -------------
+   48          void main(void)
+   49          {
+   50   1          PathType_t path;
+   51   1          PathAction_t action;
+   52   1          int left_speed, right_speed;
+   53   1          
+C251 COMPILER V5.60.0,  main                                                               01/03/26  18:13:45  PAGE 2   
+
+   54   1          System_Init();
+   55   1          
+   56   1          while(1)
+   57   1          {
+   58   2              // 读取传感器
+   59   2              Sensor_Read();
+   60   2              
+   61   2              // 滤波处理
+   62   2              Filter_Process();
+   63   2              
+   64   2              // 检测路径类型
+   65   2              path = Path_Detect(L1_filt, L2_filt, L3_filt, L4_filt);
+   66   2              
+   67   2              // 计算误差
+   68   2              error_value = Error_Calculate();
+*** WARNING C96 IN LINE 68 OF main.c: 'Error_Calculate': too few actual parameters
+   69   2              
+   70   2              // 获取控制动作
+   71   2              action = Path_Get_Action(path, L1_filt, L2_filt, L3_filt, L4_filt);
+   72   2              
+   73   2              // 执行控制
+   74   2              switch(action)
+   75   2              {
+   76   3                  case ACTION_TRACKING:
+   77   3                      // 正常循迹
+   78   3                      left_speed = BASE_SPEED_NORMAL + error_value;
+   79   3                      right_speed = BASE_SPEED_NORMAL - error_value;
+   80   3                      Motor_Control(left_speed, right_speed);
+   81   3                      break;
+   82   3                      
+   83   3                  case ACTION_TRACKING_FAST:
+   84   3                      // 快速循迹（如折线）
+   85   3                      left_speed = BASE_SPEED_FAST + error_value * 2;
+   86   3                      right_speed = BASE_SPEED_FAST - error_value * 2;
+   87   3                      Motor_Control(left_speed, right_speed);
+   88   3                      break;
+   89   3                      
+   90   3                  case ACTION_TURN_LEFT_HARD:
+   91   3                      // 急左转（直角）
+   92   3                      Motor_SetLeft(300);    // 30%占空比
+   93   3                      Motor_SetRight(700);   // 70%占空比
+   94   3                      break;
+   95   3                      
+   96   3                  case ACTION_TURN_RIGHT_HARD:
+   97   3                      // 急右转（直角）
+   98   3                      Motor_SetLeft(700);
+   99   3                      Motor_SetRight(300);
+  100   3                      break;
+  101   3                      
+  102   3                  case ACTION_TURN_LEFT_SMOOTH:
+  103   3                      // 平滑左转（圆形弯）
+  104   3                      Motor_SetLeft(400);
+  105   3                      Motor_SetRight(600);
+  106   3                      break;
+  107   3                      
+  108   3                  case ACTION_TURN_RIGHT_SMOOTH:
+  109   3                      // 平滑右转（圆形弯）
+  110   3                      Motor_SetLeft(600);
+  111   3                      Motor_SetRight(400);
+  112   3                      break;
+  113   3                      
+  114   3                  case ACTION_ROUNDABOUT:
+  115   3                      // 环岛模式
+  116   3                      Motor_SetLeft(450);
+  117   3                      Motor_SetRight(550);
+  118   3                      break;
+C251 COMPILER V5.60.0,  main                                                               01/03/26  18:13:45  PAGE 3   
+
+  119   3                      
+  120   3                  default:
+  121   3                      Motor_Stop();
+  122   3                      break;
+  123   3              }
+  124   2              
+  125   2              printf("L1=%d L2=%d L3=%d L4=%d err=%d\r\n", L1_filt, L2_filt, L3_filt, L4_filt, error_value);
+  126   2              
+  127   2              system_delay_ms(CONTROL_CYCLE_MS);  // 使用逐飞库的延时函数
+  128   2          }
+  129   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =       507     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =        14     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =        56     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

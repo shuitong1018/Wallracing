@@ -1,0 +1,153 @@
+C251 COMPILER V5.60.0,  error                                                              01/03/26  18:13:44  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE error
+OBJECT MODULE PLACED IN .\out_file\error.obj
+COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE error.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\.
+                    -.\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code)
+                    - DEBUG PRINT(.\out_file\error.lst) OBJECT(.\out_file\error.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_headfile.h"        // 逐飞库主头文件 
+    2          
+    3          // 定义系数（需要根据实际调试确定）
+    4          #define COEFF_A  1.0f   // L1-L4 的系数（左右电感差）
+    5          #define COEFF_B  0.5f   // L2-L3 的系数（前后电感差）  
+    6          #define COEFF_C  1.0f   // 分母中的系数（L2-L3的绝对值系数）
+    7          
+    8          // 误差限幅值
+    9          #define ERROR_MAX   100.0f   // 最大误差
+   10          #define ERROR_MIN   -100.0f  // 最小误差
+   11          
+   12          // 电感归一化处理
+   13          #define NORMALIZE_ENABLE     1   // 1:启用归一化, 0:禁用归一化
+   14          #define NORMALIZE_MAX        4096 // ADC最大值（12位ADC）
+   15          
+   16          // 滤波器参数
+   17          #define FILTER_ALPHA         0.3f // 一阶低通滤波系数
+   18          
+   19          static float last_error = 0.0f;   // 上一次的误差值（用于滤波）
+   20          
+   21          float my_abs(float x)
+   22          {
+   23   1          if(x < 0) return -x;
+   24   1          return x;
+   25   1      }
+   26          
+   27          /**
+   28           * @brief   电感值归一化处理
+   29           * @param   value   原始ADC值
+   30           * @return  归一化后的值（0-1.0）
+   31           */
+   32          static float normalize_sensor(int16 value) {
+   33   1      #if NORMALIZE_ENABLE
+   34   1          if(value < 0) value = 0;
+   35   1          if(value > NORMALIZE_MAX) value = NORMALIZE_MAX;
+   36   1          return (float)value / NORMALIZE_MAX;
+   37   1      #else
+                   return (float)value;
+               #endif
+   40   1      }
+   41          
+   42          /**
+   43           * @brief   一阶低通滤波器
+   44           * @param   new_value   新值
+   45           * @param   last_value  上一次的值
+   46           * @return  滤波后的值
+   47           */
+   48          static float low_pass_filter(float new_value, float last_value) {
+   49   1          return FILTER_ALPHA * new_value + (1.0f - FILTER_ALPHA) * last_value;
+   50   1      }
+   51          
+   52          /**
+   53           * @brief   计算智能车路径误差
+   54           * @param   L1  电感1的值（左侧前电感）
+   55           * @param   L2  电感2的值（左侧后电感）
+   56           * @param   L3  电感3的值（右侧后电感）
+   57           * @param   L4  电感4的值（右侧前电感）
+C251 COMPILER V5.60.0,  error                                                              01/03/26  18:13:44  PAGE 2   
+
+   58           * @return  计算得到的误差值（已限幅和滤波）
+   59           */
+   60          float Error_Calculate(int16 L1, int16 L2, int16 L3, int16 L4) {
+   61   1          float fL1, fL2, fL3, fL4;   // 归一化后的电感值
+   62   1          float numerator;             // 分子
+   63   1          float denominator;           // 分母
+   64   1          float error;                 // 误差值
+   65   1          
+   66   1          // 1. 对原始ADC值进行归一化处理
+   67   1          fL1 = normalize_sensor(L1);
+   68   1          fL2 = normalize_sensor(L2);
+   69   1          fL3 = normalize_sensor(L3);
+   70   1          fL4 = normalize_sensor(L4);
+   71   1          
+   72   1          // 2. 计算分子
+   73   1          numerator = COEFF_A * (fL1 - fL4) + COEFF_B * (fL2 - fL3);
+   74   1          
+   75   1          // 3. 计算分母
+   76   1          denominator = COEFF_A * (fL1 + fL4) + COEFF_C * my_abs(fL2 - fL3);
+   77   1          
+   78   1          // 4. 防止除零
+   79   1          if(denominator < 0.001f) {  // 使用小值判断避免浮点精度问题
+   80   2              error = 0.0f;
+   81   2          } else {
+   82   2              // 5. 计算误差（乘以100放大误差值）
+   83   2              error = (numerator / denominator) * 100.0f;
+   84   2          }
+   85   1          
+   86   1          // 6. 限幅
+   87   1          if(error > ERROR_MAX) {
+   88   2              error = ERROR_MAX;
+   89   2          }
+   90   1          if(error < ERROR_MIN) {
+   91   2              error = ERROR_MIN;
+   92   2          }
+   93   1          
+   94   1          // 7. 一阶低通滤波
+   95   1          error = low_pass_filter(error, last_error);
+   96   1          last_error = error;
+   97   1          
+   98   1          return error;
+   99   1      }
+  100          
+  101          /**
+  102           * @brief   获取当前误差值（不重新计算）
+  103           * @return  上一次计算的误差值
+  104           */
+  105          float Get_Last_Error(void) {
+  106   1          return last_error;
+  107   1      }
+  108          
+  109          /**
+  110           * @brief   重置误差滤波器
+  111           */
+  112          void Reset_Error_Filter(void) {
+  113   1          last_error = 0.0f;
+  114   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =       675     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =        54     ------
+C251 COMPILER V5.60.0,  error                                                              01/03/26  18:13:44  PAGE 3   
+
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =         9     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
