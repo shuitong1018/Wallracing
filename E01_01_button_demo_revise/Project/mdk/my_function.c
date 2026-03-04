@@ -21,9 +21,9 @@ void PID_update(PID_t *p)
 	if(p->out < p->OutMin) {p->out = p->OutMin;}
 }
 
-void system_init()
+void irq_init()
 {
-	tim0_irq_handler=Car_control;
+	tim0_irq_handler=PID_calculate;
 }
 
 
