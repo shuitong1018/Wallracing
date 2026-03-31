@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  zf_common_clock                                                    01/03/26  18:13:33  PAGE 1   
+C251 COMPILER V5.60.0,  zf_common_clock                                                    30/03/26  21:58:31  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE zf_common_clock
@@ -66,7 +66,7 @@ stmt  level    source
              -------------
    49          //  @brief      STC32G设置系统频率
    50          //  @param      NULL            空值
-C251 COMPILER V5.60.0,  zf_common_clock                                                    01/03/26  18:13:33  PAGE 2   
+C251 COMPILER V5.60.0,  zf_common_clock                                                    30/03/26  21:58:31  PAGE 2   
 
    51          //  @return     void            系统频率
    52          //  Sample usage:               
@@ -134,7 +134,7 @@ stmt  level    source
   113   2                      break;
   114   2                              
   115   2                      default:
-C251 COMPILER V5.60.0,  zf_common_clock                                                    01/03/26  18:13:33  PAGE 3   
+C251 COMPILER V5.60.0,  zf_common_clock                                                    30/03/26  21:58:31  PAGE 3   
 
   116   2                              sys_clk = SYSTEM_CLOCK_30M;
   117   2                              // 选择 30MHz
@@ -202,7 +202,7 @@ stmt  level    source
   178   1              S4CON = 0;
   179   1              P_SW1 = 0;
   180   1              IE2 = 0;
-C251 COMPILER V5.60.0,  zf_common_clock                                                    01/03/26  18:13:33  PAGE 4   
+C251 COMPILER V5.60.0,  zf_common_clock                                                    30/03/26  21:58:31  PAGE 4   
 
   181   1              TMOD = 0;
   182   1              

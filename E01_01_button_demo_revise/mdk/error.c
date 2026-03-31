@@ -1,114 +1,147 @@
-#include "zf_common_headfile.h"        // 逐飞库主头文件 
+#include "error.h"
+#include "sensor.h"            // 必须包含 sensor.h 才能获取到 extern 的归一化变量
+#include "zf_common_headfile.h" // 逐飞库主头文件
 
-// 定义系数（需要根据实际调试确定）
-#define COEFF_A  1.0f   // L1-L4 的系数（左右电感差）
-#define COEFF_B  0.5f   // L2-L3 的系数（前后电感差）  
-#define COEFF_C  1.0f   // 分母中的系数（L2-L3的绝对值系数）
+// ================== 1. 差比和算法参数配置 ==================
+// 这里的系数决定了你的车过弯有多“丝滑”，后续调参主要调这里
+#define COEFF_A  1.0f   // L1和L4 (外侧/前侧电感) 的差值系数：决定直线寻迹的回归速度
+#define COEFF_B  1.0f   // L2和L3 (内侧/后侧电感) 的差值系数：决定弯道内切的紧凑程度
+#define COEFF_C  1.0f   // L2和L3差值的绝对值系数：用于分母补偿，防止分母过小导致误差突变
 
-// 误差限幅值
-#define ERROR_MAX   100.0f   // 最大误差
-#define ERROR_MIN   -100.0f  // 最小误差
+// ================== 2. 误差限幅与滤波配置 ==================
+#define ERROR_MAX   100.0f   // 舵机打角的最大误差输出限幅
+#define ERROR_MIN  -100.0f   // 舵机打角的最小误差输出限幅
 
-// 电感归一化处理
-#define NORMALIZE_ENABLE     1   // 1:启用归一化, 0:禁用归一化
-#define NORMALIZE_MAX        4096 // ADC最大值（12位ADC）
+#define FILTER_WINDOW_SIZE  5    // 滑动窗口大小 (去极值平均滤波)
 
-// 滤波器参数
-#define FILTER_ALPHA         0.3f // 一阶低通滤波系数
+// ================== 3. 静态局部变量 (C251规范) ==================
+static float error_buffer[FILTER_WINDOW_SIZE];
+static unsigned char buffer_index = 0;
+static unsigned char buffer_full = 0;
 
-static float last_error = 0.0f;   // 上一次的误差值（用于滤波）
-
+// ================== 4. 辅助数学函数 ==================
+// 自定义绝对值函数 (避免引入额外的 math.h 库导致单片机 Flash 占用增加)
 float my_abs(float x)
 {
     if(x < 0) return -x;
     return x;
 }
 
-/**
- * @brief   电感值归一化处理
- * @param   value   原始ADC值
- * @return  归一化后的值（0-1.0）
- */
-static float normalize_sensor(int16 value) {
-#if NORMALIZE_ENABLE
-    if(value < 0) value = 0;
-    if(value > NORMALIZE_MAX) value = NORMALIZE_MAX;
-    return (float)value / NORMALIZE_MAX;
-#else
-    return (float)value;
-#endif
-}
-
-/**
- * @brief   一阶低通滤波器
- * @param   new_value   新值
- * @param   last_value  上一次的值
- * @return  滤波后的值
- */
-static float low_pass_filter(float new_value, float last_value) {
-    return FILTER_ALPHA * new_value + (1.0f - FILTER_ALPHA) * last_value;
-}
-
-/**
- * @brief   计算智能车路径误差
- * @param   L1  电感1的值（左侧前电感）
- * @param   L2  电感2的值（左侧后电感）
- * @param   L3  电感3的值（右侧后电感）
- * @param   L4  电感4的值（右侧前电感）
- * @return  计算得到的误差值（已限幅和滤波）
- */
-float Error_Calculate(int16 L1, int16 L2, int16 L3, int16 L4) {
-    float fL1, fL2, fL3, fL4;   // 归一化后的电感值
-    float numerator;             // 分子
-    float denominator;           // 分母
-    float error;                 // 误差值
+// ================== 5. 去极值平均滤波算法 ==================
+static float remove_extremes_average_filter(float new_value) {
+    unsigned char i;
+    float sum;
+    float max_value, min_value;
+    unsigned char valid_count;
     
-    // 1. 对原始ADC值进行归一化处理
-    fL1 = normalize_sensor(L1);
-    fL2 = normalize_sensor(L2);
-    fL3 = normalize_sensor(L3);
-    fL4 = normalize_sensor(L4);
+    // 将新算出的误差存入环形缓冲区
+    error_buffer[buffer_index] = new_value;
+    buffer_index++;
     
-    // 2. 计算分子
-    numerator = COEFF_A * (fL1 - fL4) + COEFF_B * (fL2 - fL3);
+    // 缓冲区游标循环
+    if(buffer_index >= FILTER_WINDOW_SIZE) {
+        buffer_index = 0;
+        buffer_full = 1;  
+    }
     
-    // 3. 计算分母
-    denominator = COEFF_A * (fL1 + fL4) + COEFF_C * my_abs(fL2 - fL3);
-    
-    // 4. 防止除零
-    if(denominator < 0.001f) {  // 使用小值判断避免浮点精度问题
-        error = 0.0f;
+    // 确定当前可参与计算的有效数据个数
+    if(buffer_full) {
+        valid_count = FILTER_WINDOW_SIZE;
     } else {
-        // 5. 计算误差（乘以100放大误差值）
-        error = (numerator / denominator) * 100.0f;
+        valid_count = buffer_index;
     }
     
-    // 6. 限幅
-    if(error > ERROR_MAX) {
-        error = ERROR_MAX;
-    }
-    if(error < ERROR_MIN) {
-        error = ERROR_MIN;
+    // 刚开机数据不足3个时，无法去极值，直接算普通平均
+    if(valid_count < 3) {
+        sum = 0.0f;
+        for(i = 0; i < valid_count; i++) {
+            sum += error_buffer[i];
+        }
+        return sum / valid_count;
     }
     
-    // 7. 一阶低通滤波
-    error = low_pass_filter(error, last_error);
-    last_error = error;
+    // 寻找当前窗口内的最大值和最小值
+    max_value = error_buffer[0];
+    min_value = error_buffer[0];
+    for(i = 1; i < valid_count; i++) {
+        if(error_buffer[i] > max_value) {
+            max_value = error_buffer[i];
+        }
+        if(error_buffer[i] < min_value) {
+            min_value = error_buffer[i];
+        }
+    }
     
-    return error;
+    // 累加所有值
+    sum = 0.0f;
+    for(i = 0; i < valid_count; i++) {
+        sum += error_buffer[i];
+    }
+    
+    // 减去一个最大值和一个最小值，剔除突变噪点
+    sum = sum - max_value - min_value;
+    
+    // 返回去极值后的平均偏差
+    return sum / (valid_count - 2);
 }
 
-/**
- * @brief   获取当前误差值（不重新计算）
- * @return  上一次计算的误差值
- */
+// ================== 6. 核心算法：计算赛道偏差 ==================
+float Error_Calculate(float l1_n, float l2_n, float l3_n, float l4_n) {
+    float numerator;             // 公式分子
+    float denominator;           // 公式分母
+    float raw_error;             // 原始误差
+    float L1, L2, L3, L4;        // 比例化后的电感值
+    
+    // 【关键对接步】：将 sensor.c 传过来的 0~128 的整数范围，等比例压缩到 0.0~1.0 的小数区间
+    // 这是差比和算法的数学基础，保证各个电感的权重统一
+    L1 = l1_n / 128.0f;
+    L2 = l2_n / 128.0f;
+    L3 = l3_n / 128.0f;
+    L4 = l4_n / 128.0f;
+
+    // 根据官方公式计算分子：A*(L1-L4) + B*(L2-L3)
+    numerator = COEFF_A * (L1 - L4) + COEFF_B * (L2 - L3);
+    
+    // 根据官方公式计算分母：A*(L1+L4) + C*|L2-L3|
+    denominator = COEFF_A * (L1 + L4) + COEFF_C * my_abs(L2 - L3);
+    
+    // 除零保护：如果车飞出赛道，电感全为0，分母极小，防止引发单片机硬件除零异常导致死机重启
+    if(denominator < 0.001f) {
+        raw_error = 0.0f; // 丢失赛道时，可以根据实际情况改为输出上一帧的误差 (或者保持直行)
+    } else {
+        // 算出原始偏差，并放大100倍，方便后续 PID 整数计算和观察
+        raw_error = (numerator * 100.0f) / denominator;
+    }
+    
+    // 绝对安全限幅：防止偏差过大导致舵机打死卡住齿轮
+    if(raw_error > ERROR_MAX) {
+        raw_error = ERROR_MAX;
+    }
+    if(raw_error < ERROR_MIN) {
+        raw_error = ERROR_MIN;
+    }
+    
+    // 经过滑动窗口滤波后，输出最终平滑的误差给舵机 PID 环
+    return remove_extremes_average_filter(raw_error);
+}
+
+// 获取最近一次的误差值（如果需要在其他地方读取但不触发重新计算时使用）
 float Get_Last_Error(void) {
-    return last_error;
+    unsigned char last_index;
+    if(buffer_index == 0) {
+        last_index = buffer_full ? (FILTER_WINDOW_SIZE - 1) : 0;
+    } else {
+        last_index = buffer_index - 1;
+    }
+    return error_buffer[last_index];
 }
 
-/**
- * @brief   重置误差滤波器
- */
+// 冲出赛道或发生碰撞后，重置滤波器状态
 void Reset_Error_Filter(void) {
-    last_error = 0.0f;
+    unsigned char i;
+    for(i = 0; i < FILTER_WINDOW_SIZE; i++) {
+        error_buffer[i] = 0.0f;
+    }
+    buffer_index = 0;
+    buffer_full = 0;
 }

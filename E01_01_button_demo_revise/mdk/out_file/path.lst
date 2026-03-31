@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  path                                                               01/03/26  18:13:43  PAGE 1   
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE path
@@ -9,158 +9,805 @@ COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE path.c LARGE NOALIAS WARNINGLEVEL
 
 stmt  level    source
 
-    1          #include "path.h"
-    2          #include <stdlib.h>
+    1          /*#include "path.h"
+    2          #include "zf_common_headfile.h"
     3          
     4          //==============================================================================
-    5          // 静态变量
+    5          // 常量定义
     6          //==============================================================================
-    7          static PathType_t current_path;
-    8          static int path_counter;
+    7          // 传感器数量
+    8          #define SENSOR_COUNT            4
     9          
-   10          //==============================================================================
-   11          // 路径初始化
-   12          //==============================================================================
-   13          void Path_Init(void)
-   14          {
-   15   1          current_path = PATH_STRAIGHT;
-   16   1          path_counter = 0;
-   17   1      }
-   18          
-   19          //==============================================================================
-   20          // 路径类型检测
-   21          //==============================================================================
-   22          PathType_t Path_Detect(int L1, int L2, int L3, int L4)
-   23          {
-   24   1          int edge_diff;
-   25   1          int middle_sum;
-   26   1          
-   27   1          // 检测平地
-   28   1          if(L1 < THRESHOLD_BLACK && L2 < THRESHOLD_BLACK && 
-   29   1             L3 < THRESHOLD_BLACK && L4 < THRESHOLD_BLACK) {
-   30   2              return PATH_FLAT;
-   31   2          }
-   32   1          
-   33   1          // 检测十字路口
-   34   1          if(L1 > THRESHOLD_CROSS && L2 > THRESHOLD_CROSS && 
-   35   1             L3 > THRESHOLD_CROSS && L4 > THRESHOLD_CROSS) {
-   36   2              return PATH_CROSSROAD;
-   37   2          }
-   38   1          
-   39   1          // 检测直角弯
-   40   1          edge_diff = abs(L1 - L4);
-   41   1          middle_sum = L2 + L3;
-   42   1          
-   43   1          if(edge_diff > THRESHOLD_EDGE && middle_sum < THRESHOLD_BLACK * 2) {
-   44   2              if(L1 > L4) {
-   45   3                  return PATH_LEFT_ANGLE;
-   46   3              } else {
-   47   3                  return PATH_RIGHT_ANGLE;
-   48   3              }
-   49   2          }
-   50   1          
-   51   1          return PATH_STRAIGHT;
-   52   1      }
-   53          
-   54          //==============================================================================
-   55          // 获取路径方向（偏离中心程度）
-   56          //==============================================================================
-   57          PathDirection_t Path_Get_Direction(int L1, int L2, int L3, int L4)
-C251 COMPILER V5.60.0,  path                                                               01/03/26  18:13:43  PAGE 2   
+   10          // 历史数据深度
+   11          #define HISTORY_DEPTH           5
+   12          
+   13          // 阈值常量 - 需要根据实际调试调整
+   14          #define THRESHOLD_LINE_PRESENT      30.0f   // 检测到线的阈值
+   15          #define THRESHOLD_STRONG_SIGNAL     60.0f   // 强信号阈值
+   16          #define THRESHOLD_WEAK_SIGNAL       15.0f   // 弱信号阈值
+   17          #define THRESHOLD_LOST_LINE         10.0f   // 丢线阈值
+   18          #define THRESHOLD_SIDE_DIFF         40.0f   // 左右侧差异阈值
+   19          
+   20          // 状态计数阈值
+   21          #define STRAIGHT_COUNT_THRESHOLD    3
+   22          #define ANGLE_COUNT_MAX             30
+   23          #define CIRCLE_COUNT_THRESHOLD      5
+   24          #define CROSS_COUNT_THRESHOLD       3
+   25          #define ROUNDABOUT_EDGE_MAX         6
+   26          #define LOST_LINE_MAX                20
+   27          
+   28          // 误差阈值
+   29          #define ERROR_STRAIGHT_THRESHOLD    20.0f   // 直道误差阈值
+   30          #define ERROR_CIRCLE_THRESHOLD      50.0f   // 弯道误差阈值
+   31          
+   32          //==============================================================================
+   33          // 数据结构定义
+   34          //==============================================================================
+   35          typedef struct {
+   36              float values[4];          // L1,L2,L3,L4
+   37              float error;              // 对应的误差值
+   38              PathType_t detected_type;
+   39              uint32_t timestamp;
+   40          } SensorHistory_t;
+   41          
+   42          typedef struct {
+   43              // 传感器历史
+   44              SensorHistory_t history[HISTORY_DEPTH];
+   45              int history_index;
+   46              
+   47              // 路径状态
+   48              PathType_t current_path;
+   49              PathType_t previous_path;
+   50              int path_stable_count;
+   51              
+   52              // 特殊路况计数器
+   53              int angle_counter;
+   54              int cross_counter;
+   55              int circle_counter;
+   56              int roundabout_edge_counter;
+   57              int lost_line_counter;
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 2   
 
-   58          {
-   59   1          int sum;
-   60   1          int weighted;
-   61   1          int position;
-   62   1          
-   63   1          sum = L1 + L2 + L3 + L4;
-   64   1          if(sum == 0) return DIR_STRAIGHT;
-   65   1          
-   66   1          weighted = L1 * 1 + L2 * 2 + L3 * 3 + L4 * 4;
-   67   1          position = (weighted * 100) / sum;
-   68   1          
-   69   1          if(position < 225) {
-   70   2              return DIR_LEFT;
-   71   2          } else if(position > 275) {
-   72   2              return DIR_RIGHT;
-   73   2          } else {
-   74   2              return DIR_STRAIGHT;
-   75   2          }
-   76   1      }
-   77          
-   78          //==============================================================================
-   79          // 获取控制动作
-   80          //==============================================================================
-   81          PathAction_t Path_Get_Action(PathType_t path, int L1, int L2, int L3, int L4)
-   82          {
-   83   1          PathAction_t action = ACTION_TRACKING;
-   84   1          
-   85   1          (void)L2;    // 消除未使用参数警告
-*** WARNING C138 IN LINE 85 OF path.c: expression with possibly no effect
-   86   1          (void)L3;
-*** WARNING C138 IN LINE 86 OF path.c: expression with possibly no effect
-   87   1          
-   88   1          switch(path)
-   89   1          {
-   90   2              case PATH_STRAIGHT:
-   91   2                  action = ACTION_TRACKING;
-   92   2                  break;
-   93   2                  
-   94   2              case PATH_LEFT_ANGLE:
-   95   2              case PATH_RIGHT_ANGLE:
-   96   2                  path_counter++;
-   97   2                  if(path_counter < 20) {
-   98   3                      if(L1 > L4) {
-   99   4                          action = ACTION_TURN_LEFT_HARD;
-  100   4                      } else {
-  101   4                          action = ACTION_TURN_RIGHT_HARD;
-  102   4                      }
-  103   3                  } else {
-  104   3                      path_counter = 0;
-  105   3                      action = ACTION_TRACKING;
-  106   3                  }
-  107   2                  break;
-  108   2                  
-  109   2              case PATH_CIRCULAR:
-  110   2                  if(L1 > L4) {
-  111   3                      action = ACTION_TURN_LEFT_SMOOTH;
-  112   3                  } else {
-  113   3                      action = ACTION_TURN_RIGHT_SMOOTH;
-  114   3                  }
-  115   2                  break;
-  116   2                  
-  117   2              case PATH_CROSSROAD:
-  118   2                  action = ACTION_TRACKING;
-  119   2                  break;
-  120   2                  
-  121   2              case PATH_ZIGZAG:
-C251 COMPILER V5.60.0,  path                                                               01/03/26  18:13:43  PAGE 3   
+   58              int straight_counter;
+   59              
+   60              // 特征标志
+   61              int left_bias_count;      // 左侧偏置计数
+   62              int right_bias_count;     // 右侧偏置计数
+   63              float last_error;
+   64              float last_valid_error;    // 上次有效误差
+   65              
+   66              // 环岛状态
+   67              int in_roundabout;
+   68              int roundabout_phase;      // 0:入口,1:岛内,2:出口
+   69              int roundabout_edge_count;
+   70              float roundabout_entry_error;
+   71              
+   72              // 调试信息
+   73              uint32_t last_print_time;
+   74              
+   75          } PathController_t;
+   76          
+   77          //==============================================================================
+   78          // 静态变量
+   79          //==============================================================================
+   80          static PathController_t controller;
+   81          static const char* path_type_names[] = {
+   82              "STRAIGHT", "LEFT_ANGLE", "RIGHT_ANGLE", "CIRCULAR",
+   83              "CROSSROAD", "ZIGZAG", "ROUNDABOUT", "FLAT"
+   84          };
+   85          
+   86          static const char* action_names[] = {
+   87              "TRACKING", "TURN_LEFT_HARD", "TURN_RIGHT_HARD", "TURN_LEFT_SMOOTH",
+   88              "TURN_RIGHT_SMOOTH", "TRACKING_FAST", "ROUNDABOUT", "STOP", "FORWARD_STRAIGHT"
+   89          };
+   90          
+   91          //==============================================================================
+   92          // 内部函数声明
+   93          //==============================================================================
+   94          static void update_history(float L1, float L2, float L3, float L4, float error, PathType_t type);
+   95          static PathType_t get_stable_path_type(void);
+   96          static int detect_lost_line(float L1, float L2, float L3, float L4);
+   97          static int detect_crossroad(float L1, float L2, float L3, float L4);
+   98          static int detect_angle(float L1, float L2, float L3, float L4);
+   99          static int detect_circular(float L1, float L2, float L3, float L4, float error);
+  100          static int detect_zigzag(float L1, float L2, float L3, float L4, float error);
+  101          static int detect_roundabout(float L1, float L2, float L3, float L4);
+  102          static int get_bias_direction(float L1, float L2, float L3, float L4);
+  103          static int is_exiting_special_element(void);
+  104          
+  105          //==============================================================================
+  106          // 外部函数引用
+  107          //==============================================================================
+  108          extern float Error_Calculate(float L1_norm, float L2_norm, float L3_norm, float L4_norm);
+  109          extern float my_abs(float x);
+  110          
+  111          //==============================================================================
+  112          // 路径初始化
+  113          //==============================================================================
+  114          void Path_Init(void)
+  115          {
+  116              // 初始化控制器
+  117              memset(&controller, 0, sizeof(PathController_t));
+  118              
+  119              // 初始化历史数据
+  120              for(int i = 0; i < HISTORY_DEPTH; i++) {
+  121                  controller.history[i].values[0] = 0;
+  122                  controller.history[i].values[1] = 0;
+  123                  controller.history[i].values[2] = 0;
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 3   
 
-  122   2                  action = ACTION_TRACKING_FAST;
-  123   2                  break;
-  124   2                  
-  125   2              case PATH_ROUNDABOUT:
-  126   2                  action = ACTION_ROUNDABOUT;
-  127   2                  break;
-  128   2                  
-  129   2              case PATH_FLAT:
-  130   2              default:
-  131   2                  action = ACTION_TRACKING;
-  132   2                  break;
-  133   2          }
-  134   1          
-  135   1          return action;
-  136   1      }
+  124                  controller.history[i].values[3] = 0;
+  125                  controller.history[i].error = 0;
+  126                  controller.history[i].detected_type = PATH_STRAIGHT;  // 默认直道
+  127                  controller.history[i].timestamp = 0;
+  128              }
+  129              
+  130              controller.history_index = 0;
+  131              controller.current_path = PATH_STRAIGHT;
+  132              controller.previous_path = PATH_STRAIGHT;
+  133              controller.path_stable_count = 0;
+  134              
+  135              controller.angle_counter = 0;
+  136              controller.cross_counter = 0;
+  137              controller.circle_counter = 0;
+  138              controller.roundabout_edge_counter = 0;
+  139              controller.lost_line_counter = 0;
+  140              controller.straight_counter = 0;
+  141              
+  142              controller.left_bias_count = 0;
+  143              controller.right_bias_count = 0;
+  144              controller.last_error = 0;
+  145              controller.last_valid_error = 0;
+  146              
+  147              controller.in_roundabout = 0;
+  148              controller.roundabout_phase = 0;
+  149              controller.roundabout_edge_count = 0;
+  150              controller.roundabout_entry_error = 0;
+  151              
+  152              controller.last_print_time = 0;
+  153          }
+  154          
+  155          //==============================================================================
+  156          // 增强版路径类型检测
+  157          //==============================================================================
+  158          PathType_t Path_Detect(float L1, float L2, float L3, float L4)
+  159          {
+  160              PathType_t detected = PATH_STRAIGHT;  // 默认直道
+  161              float error = Error_Calculate(L1, L2, L3, L4);
+  162              
+  163              // 1. 检测是否丢线（所有电感信号都很弱）
+  164              if(detect_lost_line(L1, L2, L3, L4)) {
+  165                  controller.lost_line_counter++;
+  166                  
+  167                  // 在特殊路况中丢线是正常的，需要结合历史状态判断
+  168                  if(controller.current_path == PATH_LEFT_ANGLE || 
+  169                     controller.current_path == PATH_RIGHT_ANGLE ||
+  170                     controller.current_path == PATH_ROUNDABOUT) {
+  171                      // 过弯或环岛时丢线正常，保持状态
+  172                      detected = controller.current_path;
+  173                      update_history(L1, L2, L3, L4, error, detected);
+  174                      return detected;
+  175                  }
+  176                  
+  177                  // 短暂丢线可能只是晃动
+  178                  if(controller.lost_line_counter < 5) {
+  179                      detected = controller.current_path;
+  180                  } else {
+  181                      detected = PATH_FLAT;
+  182                  }
+  183                  
+  184                  update_history(L1, L2, L3, L4, error, detected);
+  185                  return detected;
+  186              } else {
+  187                  controller.lost_line_counter = 0;
+  188              }
+  189              
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 4   
+
+  190              // 2. 检测十字路口（四个电感都有较强信号）
+  191              if(detect_crossroad(L1, L2, L3, L4)) {
+  192                  controller.cross_counter++;
+  193                  if(controller.cross_counter > CROSS_COUNT_THRESHOLD) {
+  194                      detected = PATH_CROSSROAD;
+  195                      update_history(L1, L2, L3, L4, error, detected);
+  196                      return detected;
+  197                  }
+  198              } else {
+  199                  controller.cross_counter = 0;
+  200              }
+  201              
+  202              // 3. 检测环岛
+  203              if(detect_roundabout(L1, L2, L3, L4)) {
+  204                  detected = PATH_ROUNDABOUT;
+  205                  update_history(L1, L2, L3, L4, error, detected);
+  206                  return detected;
+  207              }
+  208              
+  209              // 4. 检测直角弯
+  210              if(detect_angle(L1, L2, L3, L4)) {
+  211                  int direction = get_bias_direction(L1, L2, L3, L4);
+  212                  if(direction < 0) {
+  213                      detected = PATH_LEFT_ANGLE;
+  214                  } else if(direction > 0) {
+  215                      detected = PATH_RIGHT_ANGLE;
+  216                  }
+  217                  
+  218                  if(detected != PATH_STRAIGHT) {
+  219                      controller.angle_counter++;
+  220                      update_history(L1, L2, L3, L4, error, detected);
+  221                      return detected;
+  222                  }
+  223              }
+  224              
+  225              // 5. 检测圆形弯道
+  226              if(detect_circular(L1, L2, L3, L4, error)) {
+  227                  detected = PATH_CIRCULAR;
+  228                  update_history(L1, L2, L3, L4, error, detected);
+  229                  return detected;
+  230              }
+  231              
+  232              // 6. 检测折线
+  233              if(detect_zigzag(L1, L2, L3, L4, error)) {
+  234                  detected = PATH_ZIGZAG;
+  235                  update_history(L1, L2, L3, L4, error, detected);
+  236                  return detected;
+  237              }
+  238              
+  239              // 7. 默认返回直道
+  240              detected = PATH_STRAIGHT;
+  241              controller.straight_counter++;
+  242              update_history(L1, L2, L3, L4, error, detected);
+  243              
+  244              return detected;
+  245          }
+  246          
+  247          //==============================================================================
+  248          // 检测丢线情况
+  249          //==============================================================================
+  250          static int detect_lost_line(float L1, float L2, float L3, float L4)
+  251          {
+  252              return (L1 < THRESHOLD_LOST_LINE && L2 < THRESHOLD_LOST_LINE && 
+  253                      L3 < THRESHOLD_LOST_LINE && L4 < THRESHOLD_LOST_LINE);
+  254          }
+  255          
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 5   
+
+  256          //==============================================================================
+  257          // 检测十字路口
+  258          //==============================================================================
+  259          static int detect_crossroad(float L1, float L2, float L3, float L4)
+  260          {
+  261              // 十字路口特征：四个电感都有较强信号，且中间两个电感信号强于两边
+  262              float middle_avg = (L2 + L3) / 2.0f;
+  263              float side_avg = (L1 + L4) / 2.0f;
+  264              
+  265              return (L1 > THRESHOLD_STRONG_SIGNAL && 
+  266                      L2 > THRESHOLD_STRONG_SIGNAL && 
+  267                      L3 > THRESHOLD_STRONG_SIGNAL && 
+  268                      L4 > THRESHOLD_STRONG_SIGNAL &&
+  269                      middle_avg > side_avg * 1.2f);
+  270          }
+  271          
+  272          //==============================================================================
+  273          // 检测直角弯
+  274          //==============================================================================
+  275          static int detect_angle(float L1, float L2, float L3, float L4)
+  276          {
+  277              // 直角弯特征：某一侧电感信号很强，另一侧很弱
+  278              float left_sum = L1 + L2;
+  279              float right_sum = L3 + L4;
+  280              float side_diff = my_abs(left_sum - right_sum);
+  281              
+  282              // 左右差异大，且单侧信号强
+  283              if(side_diff > THRESHOLD_SIDE_DIFF * 2) {
+  284                  if((L1 > THRESHOLD_STRONG_SIGNAL && L4 < THRESHOLD_WEAK_SIGNAL) ||
+  285                     (L4 > THRESHOLD_STRONG_SIGNAL && L1 < THRESHOLD_WEAK_SIGNAL)) {
+  286                      return 1;
+  287                  }
+  288              }
+  289              
+  290              return 0;
+  291          }
+  292          
+  293          //==============================================================================
+  294          // 检测圆形弯道
+  295          //==============================================================================
+  296          static int detect_circular(float L1, float L2, float L3, float L4, float error)
+  297          {
+  298              // 圆形弯道特征：持续的较大误差，且误差方向稳定
+  299              static int same_direction_count = 0;
+  300              static float last_error_direction = 0;
+  301              
+  302              float current_direction = (error > 0) ? 1 : ((error < 0) ? -1 : 0);
+  303              
+  304              // 误差足够大且方向一致
+  305              if(my_abs(error) > ERROR_CIRCLE_THRESHOLD) {
+  306                  if(current_direction == last_error_direction) {
+  307                      same_direction_count++;
+  308                  } else {
+  309                      same_direction_count = 1;
+  310                  }
+  311              } else {
+  312                  same_direction_count = 0;
+  313              }
+  314              
+  315              last_error_direction = current_direction;
+  316              
+  317              return (same_direction_count > CIRCLE_COUNT_THRESHOLD);
+  318          }
+  319          
+  320          //==============================================================================
+  321          // 检测折线
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 6   
+
+  322          //==============================================================================
+  323          static int detect_zigzag(float L1, float L2, float L3, float L4, float error)
+  324          {
+  325              // 折线特征：误差快速变化
+  326              static float last_error = 0;
+  327              static int change_count = 0;
+  328              
+  329              float error_change = my_abs(error - last_error);
+  330              
+  331              if(error_change > 50.0f) {  // 误差变化大
+  332                  change_count++;
+  333                  if(change_count > 3) {
+  334                      change_count = 0;
+  335                      last_error = error;
+  336                      return 1;
+  337                  }
+  338              } else {
+  339                  change_count = 0;
+  340              }
+  341              
+  342              last_error = error;
+  343              return 0;
+  344          }
+  345          
+  346          //==============================================================================
+  347          // 检测环岛
+  348          //==============================================================================
+  349          static int detect_roundabout(float L1, float L2, float L3, float L4)
+  350          {
+  351              // 环岛特征：长时间的单侧偏置
+  352              int direction = get_bias_direction(L1, L2, L3, L4);
+  353              
+  354              if(direction < 0) {  // 左偏
+  355                  controller.left_bias_count++;
+  356                  controller.right_bias_count = 0;
+  357              } else if(direction > 0) {  // 右偏
+  358                  controller.right_bias_count++;
+  359                  controller.left_bias_count = 0;
+  360              } else {
+  361                  // 短暂回中不立即清零
+  362                  if(controller.left_bias_count > 0) {
+  363                      controller.left_bias_count = controller.left_bias_count > 2 ? controller.left_bias_count - 1 
+             -: 0;
+  364                  }
+  365                  if(controller.right_bias_count > 0) {
+  366                      controller.right_bias_count = controller.right_bias_count > 2 ? controller.right_bias_count -
+             - 1 : 0;
+  367                  }
+  368              }
+  369              
+  370              // 连续多次同向偏置，可能是环岛
+  371              if(controller.left_bias_count > 8 || controller.right_bias_count > 8) {
+  372                  return 1;
+  373              }
+  374              
+  375              return 0;
+  376          }
+  377          
+  378          //==============================================================================
+  379          // 获取偏置方向
+  380          //==============================================================================
+  381          static int get_bias_direction(float L1, float L2, float L3, float L4)
+  382          {
+  383              float left_strength = L1 + L2;
+  384              float right_strength = L3 + L4;
+  385              
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 7   
+
+  386              if(left_strength > right_strength + THRESHOLD_SIDE_DIFF) {
+  387                  return -1;  // 左偏
+  388              } else if(right_strength > left_strength + THRESHOLD_SIDE_DIFF) {
+  389                  return 1;   // 右偏
+  390              } else {
+  391                  return 0;   // 居中
+  392              }
+  393          }
+  394          
+  395          //==============================================================================
+  396          // 更新传感器历史
+  397          //==============================================================================
+  398          static void update_history(float L1, float L2, float L3, float L4, float error, PathType_t type)
+  399          {
+  400              controller.history_index = (controller.history_index + 1) % HISTORY_DEPTH;
+  401              
+  402              controller.history[controller.history_index].values[0] = L1;
+  403              controller.history[controller.history_index].values[1] = L2;
+  404              controller.history[controller.history_index].values[2] = L3;
+  405              controller.history[controller.history_index].values[3] = L4;
+  406              controller.history[controller.history_index].error = error;
+  407              controller.history[controller.history_index].detected_type = type;
+  408              controller.history[controller.history_index].timestamp = systick_get_ms();
+  409          }
+  410          
+  411          //==============================================================================
+  412          // 获取稳定的路径类型
+  413          //==============================================================================
+  414          static PathType_t get_stable_path_type(void)
+  415          {
+  416              int count[PATH_TYPE_COUNT] = {0};
+  417              int max_count = 0;
+  418              PathType_t stable_type = PATH_STRAIGHT;
+  419              
+  420              // 统计历史数据
+  421              for(int i = 0; i < HISTORY_DEPTH; i++) {
+  422                  PathType_t type = controller.history[i].detected_type;
+  423                  if(type < PATH_TYPE_COUNT) {
+  424                      count[type]++;
+  425                  }
+  426              }
+  427              
+  428              // 找出现次数最多的类型
+  429              for(int i = 0; i < PATH_TYPE_COUNT; i++) {
+  430                  if(count[i] > max_count) {
+  431                      max_count = count[i];
+  432                      stable_type = (PathType_t)i;
+  433                  }
+  434              }
+  435              
+  436              // 需要达到一定置信度，否则保持当前路径
+  437              if(max_count < HISTORY_DEPTH / 2) {
+  438                  return controller.current_path;
+  439              }
+  440              
+  441              return stable_type;
+  442          }
+  443          
+  444          //==============================================================================
+  445          // 获取路径方向
+  446          //==============================================================================
+  447          PathDirection_t Path_Get_Direction(float L1, float L2, float L3, float L4)
+  448          {
+  449              float error = Error_Calculate(L1, L2, L3, L4);
+  450              
+  451              if(error < -ERROR_STRAIGHT_THRESHOLD) {
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 8   
+
+  452                  return DIR_LEFT;
+  453              } else if(error > ERROR_STRAIGHT_THRESHOLD) {
+  454                  return DIR_RIGHT;
+  455              } else {
+  456                  return DIR_STRAIGHT;
+  457              }
+  458          }
+  459          
+  460          //==============================================================================
+  461          // 获取控制动作
+  462          //==============================================================================
+  463          PathAction_t Path_Get_Action(PathType_t path, float L1, float L2, float L3, float L4)
+  464          {
+  465              PathAction_t action = ACTION_TRACKING;
+  466              float error = Error_Calculate(L1, L2, L3, L4);
+  467              int direction = get_bias_direction(L1, L2, L3, L4);
+  468              
+  469              // 更新路径状态
+  470              controller.previous_path = controller.current_path;
+  471              PathType_t stable_path = get_stable_path_type();
+  472              if(stable_path != controller.current_path) {
+  473                  // 路径变化时，适当延时确认
+  474                  controller.path_stable_count++;
+  475                  if(controller.path_stable_count > STRAIGHT_COUNT_THRESHOLD) {
+  476                      controller.current_path = stable_path;
+  477                      controller.path_stable_count = 0;
+  478                  }
+  479              } else {
+  480                  controller.path_stable_count = 0;
+  481              }
+  482              
+  483              // 保存有效误差（非丢线时）
+  484              if(!detect_lost_line(L1, L2, L3, L4)) {
+  485                  controller.last_valid_error = error;
+  486              }
+  487              
+  488              // 根据不同路径类型生成控制动作
+  489              switch(controller.current_path)
+  490              {
+  491                  case PATH_STRAIGHT:
+  492                      // 直道：正常循迹
+  493                      action = ACTION_TRACKING;
+  494                      controller.angle_counter = 0;
+  495                      controller.circle_counter = 0;
+  496                      controller.roundabout_edge_counter = 0;
+  497                      break;
+  498                      
+  499                  case PATH_LEFT_ANGLE:
+  500                      // 左直角弯
+  501                      controller.angle_counter++;
+  502                      
+  503                      if(controller.angle_counter < 10) {
+  504                          // 入弯初期：强转向
+  505                          action = ACTION_TURN_LEFT_HARD;
+  506                      } else if(controller.angle_counter < 25) {
+  507                          // 弯道中：保持转向
+  508                          action = ACTION_TURN_LEFT_HARD;
+  509                      } else {
+  510                          // 准备出弯
+  511                          action = ACTION_TRACKING;
+  512                      }
+  513                      
+  514                      // 出弯判断
+  515                      if(controller.angle_counter > ANGLE_COUNT_MAX || 
+  516                         (my_abs(error) < ERROR_STRAIGHT_THRESHOLD && controller.angle_counter > 15)) {
+  517                          controller.angle_counter = 0;
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 9   
+
+  518                      }
+  519                      break;
+  520                      
+  521                  case PATH_RIGHT_ANGLE:
+  522                      // 右直角弯
+  523                      controller.angle_counter++;
+  524                      
+  525                      if(controller.angle_counter < 10) {
+  526                          action = ACTION_TURN_RIGHT_HARD;
+  527                      } else if(controller.angle_counter < 25) {
+  528                          action = ACTION_TURN_RIGHT_HARD;
+  529                      } else {
+  530                          action = ACTION_TRACKING;
+  531                      }
+  532                      
+  533                      if(controller.angle_counter > ANGLE_COUNT_MAX || 
+  534                         (my_abs(error) < ERROR_STRAIGHT_THRESHOLD && controller.angle_counter > 15)) {
+  535                          controller.angle_counter = 0;
+  536                      }
+  537                      break;
+  538                      
+  539                  case PATH_CIRCULAR:
+  540                      // 圆形弯道：平滑转向
+  541                      controller.circle_counter++;
+  542                      if(error < -ERROR_CIRCLE_THRESHOLD) {
+  543                          action = ACTION_TURN_LEFT_SMOOTH;
+  544                      } else if(error > ERROR_CIRCLE_THRESHOLD) {
+  545                          action = ACTION_TURN_RIGHT_SMOOTH;
+  546                      } else {
+  547                          action = ACTION_TRACKING;
+  548                      }
+  549                      break;
+  550                      
+  551                  case PATH_CROSSROAD:
+  552                      // 十字路口：保持直行
+  553                      action = ACTION_FORWARD_STRAIGHT;
+  554                      controller.cross_counter++;
+  555                      
+  556                      // 出十字判断
+  557                      if(controller.cross_counter > CROSS_COUNT_THRESHOLD * 3) {
+  558                          controller.cross_counter = 0;
+  559                      }
+  560                      break;
+  561                      
+  562                  case PATH_ZIGZAG:
+  563                      // 折线：快速响应
+  564                      if(my_abs(error) > ERROR_CIRCLE_THRESHOLD * 1.5f) {
+  565                          if(error < 0) {
+  566                              action = ACTION_TURN_LEFT_HARD;
+  567                          } else {
+  568                              action = ACTION_TURN_RIGHT_HARD;
+  569                          }
+  570                      } else {
+  571                          action = ACTION_TRACKING_FAST;
+  572                      }
+  573                      break;
+  574                      
+  575                  case PATH_ROUNDABOUT:
+  576                      // 环岛处理
+  577                      if(!controller.in_roundabout) {
+  578                          // 首次进入环岛
+  579                          controller.in_roundabout = 1;
+  580                          controller.roundabout_phase = 0;  // 入口
+  581                          controller.roundabout_edge_count = 0;
+  582                          controller.roundabout_entry_error = error;
+  583                      }
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 10  
+
+  584                      
+  585                      // 环岛内循迹
+  586                      if(controller.roundabout_phase == 0) {
+  587                          // 入口阶段：根据进入方向转向
+  588                          if(controller.left_bias_count > controller.right_bias_count) {
+  589                              action = ACTION_TURN_LEFT_SMOOTH;
+  590                          } else {
+  591                              action = ACTION_TURN_RIGHT_SMOOTH;
+  592                          }
+  593                          
+  594                          // 进入环岛后切换状态
+  595                          if(my_abs(error) > ERROR_CIRCLE_THRESHOLD * 1.5f) {
+  596                              controller.roundabout_phase = 1;  // 进入岛内
+  597                          }
+  598                      } else if(controller.roundabout_phase == 1) {
+  599                          // 岛内阶段：稳定循迹
+  600                          if(direction < 0) {
+  601                              action = ACTION_TURN_LEFT_SMOOTH;
+  602                          } else if(direction > 0) {
+  603                              action = ACTION_TURN_RIGHT_SMOOTH;
+  604                          } else {
+  605                              action = ACTION_TRACKING;
+  606                          }
+  607                          
+  608                          // 检测环岛边沿（丢线计数）
+  609                          if(detect_lost_line(L1, L2, L3, L4)) {
+  610                              controller.roundabout_edge_count++;
+  611                          }
+  612                      }
+  613                      
+  614                      // 环岛出口检测
+  615                      if(controller.roundabout_edge_count >= ROUNDABOUT_EDGE_MAX) {
+  616                          // 准备出环岛
+  617                          controller.roundabout_phase = 2;
+  618                          action = ACTION_FORWARD_STRAIGHT;
+  619                          
+  620                          // 完全退出环岛
+  621                          if(my_abs(error) < ERROR_STRAIGHT_THRESHOLD) {
+  622                              controller.in_roundabout = 0;
+  623                              controller.roundabout_phase = 0;
+  624                              controller.roundabout_edge_count = 0;
+  625                          }
+  626                      }
+  627                      break;
+  628                      
+  629                  case PATH_FLAT:
+  630                      // 平地/丢线：紧急处理
+  631                      controller.lost_line_counter++;
+  632                      if(controller.lost_line_counter < 10) {
+  633                          // 短暂丢线，使用上次有效误差进行循迹
+  634                          action = ACTION_TRACKING;
+  635                      } else {
+  636                          // 长时间丢线，停止
+  637                          action = ACTION_STOP;
+  638                      }
+  639                      break;
+  640                      
+  641                  default:
+  642                      action = ACTION_TRACKING;
+  643                      break;
+  644              }
+  645              
+  646              controller.last_error = error;
+  647              return action;
+  648          }
+  649          
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 11  
+
+  650          //==============================================================================
+  651          // 获取当前路径名称
+  652          //==============================================================================
+  653          const char* Path_GetName(PathType_t path)
+  654          {
+  655              if(path >= 0 && path < PATH_TYPE_COUNT) {
+  656                  return path_type_names[path];
+  657              }
+  658              return "UNKNOWN";
+  659          }
+  660          
+  661          //==============================================================================
+  662          // 获取动作名称
+  663          //==============================================================================
+  664          const char* Action_GetName(PathAction_t action)
+  665          {
+  666              if(action >= 0 && action < ACTION_COUNT) {
+  667                  return action_names[action];
+  668              }
+  669              return "UNKNOWN";
+  670          }
+  671          
+  672          //==============================================================================
+  673          // 获取当前路径状态
+  674          //==============================================================================
+  675          PathType_t Path_GetCurrent(void)
+  676          {
+  677              return controller.current_path;
+  678          }
+  679          
+  680          //==============================================================================
+  681          // 判断是否需要减速
+  682          //==============================================================================
+  683          int Path_NeedSlowDown(PathType_t path)
+  684          {
+  685              switch(path) {
+  686                  case PATH_LEFT_ANGLE:
+  687                  case PATH_RIGHT_ANGLE:
+  688                  case PATH_ZIGZAG:
+  689                      return 2;  // 大幅减速
+  690                  case PATH_ROUNDABOUT:
+  691                      return 3;  // 最大减速
+  692                  case PATH_CIRCULAR:
+  693                      return 1;  // 轻微减速
+  694                  case PATH_CROSSROAD:
+  695                      return 1;  // 轻微减速
+  696                  default:
+  697                      return 0;  // 不需要减速
+  698              }
+  699          }
+  700          
+  701          //==============================================================================
+  702          // 获取推荐速度系数
+  703          //==============================================================================
+  704          float Path_GetSpeedFactor(PathType_t path)
+  705          {
+  706              switch(path) {
+  707                  case PATH_STRAIGHT:
+  708                      return 1.0f;      // 全速
+  709                  case PATH_CIRCULAR:
+  710                      return 0.7f;      // 70%速度
+  711                  case PATH_CROSSROAD:
+  712                      return 0.6f;      // 60%速度
+  713                  case PATH_LEFT_ANGLE:
+  714                  case PATH_RIGHT_ANGLE:
+  715                      return 0.4f;      // 40%速度
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 12  
+
+  716                  case PATH_ZIGZAG:
+  717                      return 0.35f;     // 35%速度
+  718                  case PATH_ROUNDABOUT:
+  719                      return 0.3f;      // 30%速度
+  720                  case PATH_FLAT:
+  721                      return 0.2f;      // 20%速度
+  722                  default:
+  723                      return 0.6f;
+  724              }
+  725          }
+  726          
+  727          //==============================================================================
+  728          // 重置路径检测状态
+  729          //==============================================================================
+  730          void Path_Reset(void)
+  731          {
+  732              Path_Init();
+  733          }
+  734          
+  735          //==============================================================================
+  736          // 路径调试信息打印
+  737          //==============================================================================
+  738          void Path_Debug_Print(float L1, float L2, float L3, float L4)
+  739          {
+  740              uint32_t current_time = systick_get_ms();
+  741              
+  742              // 每200ms打印一次
+  743              if(current_time - controller.last_print_time > 200) {
+  744                  controller.last_print_time = current_time;
+  745                  
+  746                  float error = Error_Calculate(L1, L2, L3, L4);
+  747                  PathType_t current = Path_GetCurrent();
+  748                  PathDirection_t dir = Path_Get_Direction(L1, L2, L3, L4);
+  749                  
+  750                  printf("Path: %s, Dir: %d, Error: %.1f, L1:%.1f L2:%.1f L3:%.1f L4:%.1f\r\n",
+  751                         Path_GetName(current), dir, error, L1, L2, L3, L4);
+  752                  
+  753                  // 打印特殊状态
+  754                  if(controller.in_roundabout) {
+  755                      printf("Roundabout: Phase=%d, Edge=%d\r\n", 
+  756                             controller.roundabout_phase, controller.roundabout_edge_count);
+  757                  }
+  758                  
+  759                  // 打印偏置计数
+  760                  if(controller.left_bias_count > 0 || controller.right_bias_count > 0) {
+  761                      printf("Bias: L=%d, R=%d\r\n", controller.left_bias_count, controller.right_bias_count);
+  762                  }
+  763              }
+  764          }*/
+*** WARNING C38 IN LINE 764 OF path.c: empty translation unit
 
 
 Module Information          Static   Overlayable
 ------------------------------------------------
-  code size            =       724     ------
+  code size            =    ------     ------
   ecode size           =    ------     ------
   data size            =    ------     ------
   idata size           =    ------     ------
   pdata size           =    ------     ------
-  xdata size           =        38     ------
+  xdata size           =    ------     ------
   xdata-const size     =    ------     ------
   edata size           =    ------     ------
   bit size             =    ------     ------
@@ -168,10 +815,12 @@ Module Information          Static   Overlayable
   bitaddressable size  =    ------     ------
   ebitaddressable size =    ------     ------
   far data size        =    ------     ------
+C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 13  
+
   huge data size       =    ------     ------
   const size           =    ------     ------
   hconst size          =    ------     ------
 End of Module Information.
 
 
-C251 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)
+C251 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

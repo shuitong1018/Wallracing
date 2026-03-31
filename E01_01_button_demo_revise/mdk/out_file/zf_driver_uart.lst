@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  zf_driver_uart                                                     01/03/26  18:13:38  PAGE 1   
+C251 COMPILER V5.60.0,  zf_driver_uart                                                     30/03/26  21:58:34  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE zf_driver_uart
@@ -66,7 +66,7 @@ stmt  level    source
    53          #define DMA_URXT_DONE(uart_n)           (*(unsigned char volatile far *)(0x7efa34 + uart_n*0x10))
    54          #define DMA_URXT_TXAH(uart_n)           (*(unsigned char volatile far *)(0x7efa35 + uart_n*0x10))
    55          #define DMA_URXT_TXAL(uart_n)           (*(unsigned char volatile far *)(0x7efa36 + uart_n*0x10))
-C251 COMPILER V5.60.0,  zf_driver_uart                                                     01/03/26  18:13:38  PAGE 2   
+C251 COMPILER V5.60.0,  zf_driver_uart                                                     30/03/26  21:58:34  PAGE 2   
 
    56          #define DMA_URXR_CFG(uart_n)            (*(unsigned char volatile far *)(0x7efa38 + uart_n*0x10))
    57          #define DMA_URXR_CR(uart_n)             (*(unsigned char volatile far *)(0x7efa39 + uart_n*0x10))
@@ -134,7 +134,7 @@ stmt  level    source
   115   1              // 因UART_DMA只能操作xdata区域的数据，所以，这里新建一个数组，搬移。
   116   1              uint8 xdata tmp_buff[BUFF_LEN] = {0};
   117   1          uint16 tmp_len = 0;
-C251 COMPILER V5.60.0,  zf_driver_uart                                                     01/03/26  18:13:38  PAGE 3   
+C251 COMPILER V5.60.0,  zf_driver_uart                                                     30/03/26  21:58:34  PAGE 3   
 
   118   1              while(len)
   119   1              {
@@ -202,7 +202,7 @@ stmt  level    source
   175   1          DMA_URXR_RXAH(uart_n) = (uint8)((uint16)uart_rx_buff[uart_n] >> 8); // 设置接收缓冲地址
   176   1          DMA_URXR_CR(uart_n) = 0xA1;                                                                                 // 开启DMA RX接收中断，开启DMA RX接收，清空FIFO
   177   1      }
-C251 COMPILER V5.60.0,  zf_driver_uart                                                     01/03/26  18:13:38  PAGE 4   
+C251 COMPILER V5.60.0,  zf_driver_uart                                                     30/03/26  21:58:34  PAGE 4   
 
   178          
   179          //-------------------------------------------------------------------------------------------------------
@@ -270,7 +270,7 @@ stmt  level    source
   235   1              *dat = uart_rx_buff[uart_n][0];
   236   1              
   237   1              if(DMA_URXR_STA(uart_n) & 0x03)
-C251 COMPILER V5.60.0,  zf_driver_uart                                                     01/03/26  18:13:38  PAGE 5   
+C251 COMPILER V5.60.0,  zf_driver_uart                                                     30/03/26  21:58:34  PAGE 5   
 
   238   1              {
   239   2                      ret = 1;
@@ -338,7 +338,7 @@ stmt  level    source
   296   1          // 比如初始化了 UART1 然后又初始化成 SPI1 这种用法是不允许的
   297   1              // UART1和SPI1使用同一个寄存器，要么用UART1要么使用SPI1,只能是二选一。
   298   1              // UART2和SPI2使用同一个寄存器，要么用UART2要么使用SPI2,只能是二选一。
-C251 COMPILER V5.60.0,  zf_driver_uart                                                     01/03/26  18:13:38  PAGE 6   
+C251 COMPILER V5.60.0,  zf_driver_uart                                                     30/03/26  21:58:34  PAGE 6   
 
   299   1          zf_assert(uart_funciton_check(uart_n, UART_FUNCTION_UART));
   300   1              
@@ -406,7 +406,7 @@ stmt  level    source
   362   3                  break;
   363   3              }
   364   2              
-C251 COMPILER V5.60.0,  zf_driver_uart                                                     01/03/26  18:13:38  PAGE 7   
+C251 COMPILER V5.60.0,  zf_driver_uart                                                     30/03/26  21:58:34  PAGE 7   
 
   365   2              case UART_2:
   366   2              {
@@ -474,7 +474,7 @@ stmt  level    source
   428   4                      S4CON |= 0x10;
   429   4                      T2L = brt;
   430   4                      T2H = brt >> 8;
-C251 COMPILER V5.60.0,  zf_driver_uart                                                     01/03/26  18:13:38  PAGE 8   
+C251 COMPILER V5.60.0,  zf_driver_uart                                                     30/03/26  21:58:34  PAGE 8   
 
   431   4                      AUXR |= 0x14;
   432   4                  }

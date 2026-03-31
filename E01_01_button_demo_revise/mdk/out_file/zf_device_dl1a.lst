@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 1   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE zf_device_dl1a
@@ -66,7 +66,7 @@ stmt  level    source
    47          #include "zf_common_debug.h"
    48          #include "zf_driver_delay.h"
    49          #include "zf_driver_soft_iic.h"
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 2   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 2   
 
    50          #include "zf_device_dl1a.h"
    51          #include "zf_device_type.h"
@@ -134,7 +134,7 @@ stmt  level    source
   104   2              dl1a_write_register(0x80, 0x01);
   105   2              dl1a_write_register(0xFF, 0x01);
   106   2              dl1a_write_register(0x00, 0x00);
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 3   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 3   
 
   107   2              
   108   2              dl1a_write_register(0xFF, 0x06);
@@ -202,7 +202,7 @@ stmt  level    source
              -------------
   168          static uint32 dl1a_timeout_mclks_to_microseconds (uint16 timeout_period_mclks, uint8 vcsel_period_pclks)
   169          {
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 4   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 4   
 
   170   1          uint32 macro_period_ns = calc_macro_period(vcsel_period_pclks);
   171   1          
@@ -270,7 +270,7 @@ stmt  level    source
   226   3              }
   227   2              
   228   2              return_data = (ms_byte << 8) | (ls_byte & 0xFF);
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 5   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 5   
 
   229   2          }
   230   1          
@@ -338,7 +338,7 @@ stmt  level    source
   287          // 使用示例     dl1a_get_sequence_step_timeouts(enables, timeouts);
   288          // 备注信息     获取所有超时而不仅仅是请求的超时 并且还存储中间值
   289          //-------------------------------------------------------------------------------------------------------
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 6   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 6   
 
              -------------
   290          static void dl1a_get_sequence_step_timeouts (dl1a_sequence_enables_step_struct const *enables, dl1a_seque
@@ -406,7 +406,7 @@ stmt  level    source
   345   4                      return_state = 1;
   346   4                      break;
   347   4                  }
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 7   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 7   
 
   348   3              }
   349   2              
@@ -474,7 +474,7 @@ stmt  level    source
   409   2              {
   410   3                  used_budget_us += (timeouts.msrc_dss_tcc_us + DL1A_MSRC_OVERHEAD);
   411   3              }
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 8   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 8   
 
   412   2              
   413   2              if(enables.pre_range)
@@ -542,7 +542,7 @@ stmt  level    source
   473   1          dl1a_get_sequence_step_timeouts(&enables, &timeouts);
   474   1          
   475   1          if(enables.tcc)
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 9   
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 9   
 
   476   1          {
   477   2              budget_us += (timeouts.msrc_dss_tcc_us + DL1A_TCC_OVERHEAD);
@@ -610,7 +610,7 @@ stmt  level    source
   534          void dl1a_get_distance (void)
   535          {
   536   1          if(dl1a_init_flag)
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 10  
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 10  
 
   537   1          {
   538   2              uint8 reg_databuffer[3];
@@ -678,7 +678,7 @@ stmt  level    source
   597   1          
   598   1          uint8 temp_buff2[][2] =     // BUFF2
   599   1          {
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 11  
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 11  
 
   600   1              {0x00, 0x01},
   601   1              {0xFF, 0x00},
@@ -746,7 +746,7 @@ stmt  level    source
   663   1              {0x40, 0x40},
   664   1              {0x0E, 0x06},
   665   1              {0x20, 0x1A},
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 12  
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 12  
 
   666   1              {0x43, 0x40},
   667   1              {0xFF, 0x00},
@@ -814,7 +814,7 @@ stmt  level    source
   727   2              {
   728   3                  dl1a_write_register(temp_buff1[i][0], temp_buff1[i][1]);
   729   3              }
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 13  
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 13  
 
   730   2              
   731   2              //        dl1a_write_register(0x88, 0x00);                                         // 设置为�
@@ -882,7 +882,7 @@ stmt  level    source
   792   3              }
   793   2              
   794   2              data_buffer[0] = DL1A_GLOBAL_CONFIG_SPAD_ENABLES_REF_0;
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 14  
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 14  
 
   795   2              
   796   2              for(i = 1; 7 > i; i ++)
@@ -950,7 +950,7 @@ stmt  level    source
   858   2              //        dl1a_write_register(0x20, 0x1A);
   859   2              //        dl1a_write_register(0x43, 0x40);
   860   2              //        dl1a_write_register(0xFF, 0x00);
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 15  
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 15  
 
   861   2              //        dl1a_write_register(0x34, 0x03);
   862   2              //        dl1a_write_register(0x35, 0x44);
@@ -1018,7 +1018,7 @@ stmt  level    source
   924   2              
   925   2              system_delay_ms(100);
   926   2              
-C251 COMPILER V5.60.0,  zf_device_dl1a                                                     01/03/26  18:13:39  PAGE 16  
+C251 COMPILER V5.60.0,  zf_device_dl1a                                                     30/03/26  21:58:34  PAGE 16  
 
   927   2              dl1a_write_register(0x80, 0x01);
   928   2              dl1a_write_register(0xFF, 0x01);

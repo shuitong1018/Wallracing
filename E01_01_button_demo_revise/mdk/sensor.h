@@ -1,14 +1,14 @@
-#ifndef __SENSOR_H
-#define __SENSOR_H
+#ifndef _SENSOR_H_
+#define _SENSOR_H_
 
-#include "zf_common_typedef.h"  // 包含基础类型定义
-#include "zf_driver_gpio.h"      // GPIO驱动
-#include "zf_driver_adc.h"       // ADC驱动
-#include "config.h"
+#include "zf_common_headfile.h"
 
-extern int L1, L2, L3, L4;
+// 声明全局变量
+extern float L1_norm, L2_norm, L3_norm, L4_norm;
 
+// 声明对外开放的函数
 void Sensor_Init(void);
-void Sensor_Read(void);
+void Sensor_Read_Normalized(void);
+void Sensor_Monitor(void); 
 
 #endif

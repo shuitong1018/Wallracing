@@ -1,28 +1,13 @@
-#include "zf_common_typedef.h"
-#include "zf_common_clock.h"
-#include "zf_common_debug.h"
-#include "zf_common_interrupt.h"
-#include "zf_driver_delay.h"
-#include "zf_driver_adc.h"
-#include "zf_driver_gpio.h"
-#include "zf_driver_pwm.h"
-#include "zf_driver_uart.h"
-
+#include "zf_common_headfile.h" 
 #include "config.h"
 #include "sensor.h"
-#include "filter.h"
 #include "path.h"
-#include "motor.h"
 #include "error.h"
+#
 
 // 全局变量
-int base_speed = BASE_SPEED_NORMAL;
-int target_speed_diff = 0;
-int error_value = 0;
-
-
-extern int L1, L2, L3, L4;           // 定义在 sensor.c
-extern int L1_filt, L2_filt, L3_filt, L4_filt;  // 定义在 filter.c
+float error_value = 0.0f;
+extern float L1_norm, L2_norm, L3_norm, L4_norm;           
 
 //-------------------------------------------------------------------------------------------------------------------
 // 系统初始化
@@ -31,13 +16,10 @@ void System_Init(void)
 {
     // 逐飞库必须的初始化
     clock_init(SYSTEM_CLOCK_30M);      // 系统时钟初始化为30MHz
-    debug_init();                        // 调试串口初始化
+    debug_init();                       // 调试串口初始化 - 占用 P31(TX) 和 P30(RX)UART引脚
     
     // 各模块初始化
     Sensor_Init();
-    Filter_Init();
-    Path_Init();
-    Motor_Init();
     
     system_delay_ms(100);                // 使用逐飞库的延时函数
 }
@@ -47,31 +29,23 @@ void System_Init(void)
 //-------------------------------------------------------------------------------------------------------------------
 void main(void)
 {
-    PathType_t path;
-    PathAction_t action;
-    int left_speed, right_speed;
     
     System_Init();
-    
     while(1)
     {
         // 读取传感器
-        Sensor_Read();
-        
-        // 滤波处理
-        Filter_Process();
-        
-        // 检测路径类型
-        path = Path_Detect(L1_filt, L2_filt, L3_filt, L4_filt);
-        
+		Sensor_Read_Normalized();
+		Sensor_Monitor();
+	
         // 计算误差
-        error_value = Error_Calculate();
-        
-        // 获取控制动作
-        action = Path_Get_Action(path, L1_filt, L2_filt, L3_filt, L4_filt);
+        error_value = Error_Calculate(L1_norm, L2_norm, L3_norm, L4_norm);
+		printf("the error is %.2f\r\n",error_value);
+		system_delay_ms(500);  // 使用逐飞库的延时函数
+	}
+}
         
         // 执行控制
-        switch(action)
+        /*switch(action)
         {
             case ACTION_TRACKING:
                 // 正常循迹
@@ -120,10 +94,5 @@ void main(void)
             default:
                 Motor_Stop();
                 break;
-        }
+        }*/
         
-        printf("L1=%d L2=%d L3=%d L4=%d err=%d\r\n", L1_filt, L2_filt, L3_filt, L4_filt, error_value);
-        
-        system_delay_ms(CONTROL_CYCLE_MS);  // 使用逐飞库的延时函数
-    }
-}

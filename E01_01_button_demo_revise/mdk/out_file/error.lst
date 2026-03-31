@@ -1,4 +1,4 @@
-C251 COMPILER V5.60.0,  error                                                              01/03/26  18:13:44  PAGE 1   
+C251 COMPILER V5.60.0,  error                                                              30/03/26  21:58:37  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE error
@@ -9,134 +9,167 @@ COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE error.c LARGE NOALIAS WARNINGLEVE
 
 stmt  level    source
 
-    1          #include "zf_common_headfile.h"        // 逐飞库主头文件 
-    2          
-    3          // 定义系数（需要根据实际调试确定）
-    4          #define COEFF_A  1.0f   // L1-L4 的系数（左右电感差）
-    5          #define COEFF_B  0.5f   // L2-L3 的系数（前后电感差）  
-    6          #define COEFF_C  1.0f   // 分母中的系数（L2-L3的绝对值系数）
-    7          
-    8          // 误差限幅值
-    9          #define ERROR_MAX   100.0f   // 最大误差
-   10          #define ERROR_MIN   -100.0f  // 最小误差
-   11          
-   12          // 电感归一化处理
-   13          #define NORMALIZE_ENABLE     1   // 1:启用归一化, 0:禁用归一化
-   14          #define NORMALIZE_MAX        4096 // ADC最大值（12位ADC）
-   15          
-   16          // 滤波器参数
-   17          #define FILTER_ALPHA         0.3f // 一阶低通滤波系数
-   18          
-   19          static float last_error = 0.0f;   // 上一次的误差值（用于滤波）
-   20          
-   21          float my_abs(float x)
-   22          {
-   23   1          if(x < 0) return -x;
-   24   1          return x;
-   25   1      }
-   26          
-   27          /**
-   28           * @brief   电感值归一化处理
-   29           * @param   value   原始ADC值
-   30           * @return  归一化后的值（0-1.0）
-   31           */
-   32          static float normalize_sensor(int16 value) {
-   33   1      #if NORMALIZE_ENABLE
-   34   1          if(value < 0) value = 0;
-   35   1          if(value > NORMALIZE_MAX) value = NORMALIZE_MAX;
-   36   1          return (float)value / NORMALIZE_MAX;
-   37   1      #else
-                   return (float)value;
-               #endif
-   40   1      }
-   41          
-   42          /**
-   43           * @brief   一阶低通滤波器
-   44           * @param   new_value   新值
-   45           * @param   last_value  上一次的值
-   46           * @return  滤波后的值
-   47           */
-   48          static float low_pass_filter(float new_value, float last_value) {
-   49   1          return FILTER_ALPHA * new_value + (1.0f - FILTER_ALPHA) * last_value;
-   50   1      }
-   51          
-   52          /**
-   53           * @brief   计算智能车路径误差
-   54           * @param   L1  电感1的值（左侧前电感）
-   55           * @param   L2  电感2的值（左侧后电感）
-   56           * @param   L3  电感3的值（右侧后电感）
-   57           * @param   L4  电感4的值（右侧前电感）
-C251 COMPILER V5.60.0,  error                                                              01/03/26  18:13:44  PAGE 2   
+    1          #include "error.h"
+    2          #include "sensor.h"            // 必须包含 sensor.h 才能获取到 extern 的归一化变量
+    3          #include "zf_common_headfile.h" // 逐飞库主头文件
+    4          
+    5          // ================== 1. 差比和算法参数配置 ==================
+    6          // 这里的系数决定了你的车过弯有多“丝滑”，后续调参主要调这里
+    7          #define COEFF_A  1.0f   // L1和L4 (外侧/前侧电感) 的差值系数：决定直线寻迹的回归速度
+    8          #define COEFF_B  1.0f   // L2和L3 (内侧/后侧电感) 的差值系数：决定弯道内切的紧凑程度
+    9          #define COEFF_C  1.0f   // L2和L3差值的绝对值系数：用于分母补偿，防止分母过小导致误差突变
+   10          
+   11          // ================== 2. 误差限幅与滤波配置 ==================
+   12          #define ERROR_MAX   100.0f   // 舵机打角的最大误差输出限幅
+   13          #define ERROR_MIN  -100.0f   // 舵机打角的最小误差输出限幅
+   14          
+   15          #define FILTER_WINDOW_SIZE  5    // 滑动窗口大小 (去极值平均滤波)
+   16          
+   17          // ================== 3. 静态局部变量 (C251规范) ==================
+   18          static float error_buffer[FILTER_WINDOW_SIZE];
+   19          static unsigned char buffer_index = 0;
+   20          static unsigned char buffer_full = 0;
+   21          
+   22          // ================== 4. 辅助数学函数 ==================
+   23          // 自定义绝对值函数 (避免引入额外的 math.h 库导致单片机 Flash 占用增加)
+   24          float my_abs(float x)
+   25          {
+   26   1          if(x < 0) return -x;
+   27   1          return x;
+   28   1      }
+   29          
+   30          // ================== 5. 去极值平均滤波算法 ==================
+   31          static float remove_extremes_average_filter(float new_value) {
+   32   1          unsigned char i;
+   33   1          float sum;
+   34   1          float max_value, min_value;
+   35   1          unsigned char valid_count;
+   36   1          
+   37   1          // 将新算出的误差存入环形缓冲区
+   38   1          error_buffer[buffer_index] = new_value;
+   39   1          buffer_index++;
+   40   1          
+   41   1          // 缓冲区游标循环
+   42   1          if(buffer_index >= FILTER_WINDOW_SIZE) {
+   43   2              buffer_index = 0;
+   44   2              buffer_full = 1;  
+   45   2          }
+   46   1          
+   47   1          // 确定当前可参与计算的有效数据个数
+   48   1          if(buffer_full) {
+   49   2              valid_count = FILTER_WINDOW_SIZE;
+   50   2          } else {
+   51   2              valid_count = buffer_index;
+   52   2          }
+   53   1          
+   54   1          // 刚开机数据不足3个时，无法去极值，直接算普通平均
+   55   1          if(valid_count < 3) {
+   56   2              sum = 0.0f;
+   57   2              for(i = 0; i < valid_count; i++) {
+C251 COMPILER V5.60.0,  error                                                              30/03/26  21:58:37  PAGE 2   
 
-   58           * @return  计算得到的误差值（已限幅和滤波）
-   59           */
-   60          float Error_Calculate(int16 L1, int16 L2, int16 L3, int16 L4) {
-   61   1          float fL1, fL2, fL3, fL4;   // 归一化后的电感值
-   62   1          float numerator;             // 分子
-   63   1          float denominator;           // 分母
-   64   1          float error;                 // 误差值
-   65   1          
-   66   1          // 1. 对原始ADC值进行归一化处理
-   67   1          fL1 = normalize_sensor(L1);
-   68   1          fL2 = normalize_sensor(L2);
-   69   1          fL3 = normalize_sensor(L3);
-   70   1          fL4 = normalize_sensor(L4);
-   71   1          
-   72   1          // 2. 计算分子
-   73   1          numerator = COEFF_A * (fL1 - fL4) + COEFF_B * (fL2 - fL3);
+   58   3                  sum += error_buffer[i];
+   59   3              }
+   60   2              return sum / valid_count;
+   61   2          }
+   62   1          
+   63   1          // 寻找当前窗口内的最大值和最小值
+   64   1          max_value = error_buffer[0];
+   65   1          min_value = error_buffer[0];
+   66   1          for(i = 1; i < valid_count; i++) {
+   67   2              if(error_buffer[i] > max_value) {
+   68   3                  max_value = error_buffer[i];
+   69   3              }
+   70   2              if(error_buffer[i] < min_value) {
+   71   3                  min_value = error_buffer[i];
+   72   3              }
+   73   2          }
    74   1          
-   75   1          // 3. 计算分母
-   76   1          denominator = COEFF_A * (fL1 + fL4) + COEFF_C * my_abs(fL2 - fL3);
-   77   1          
-   78   1          // 4. 防止除零
-   79   1          if(denominator < 0.001f) {  // 使用小值判断避免浮点精度问题
-   80   2              error = 0.0f;
-   81   2          } else {
-   82   2              // 5. 计算误差（乘以100放大误差值）
-   83   2              error = (numerator / denominator) * 100.0f;
-   84   2          }
-   85   1          
-   86   1          // 6. 限幅
-   87   1          if(error > ERROR_MAX) {
-   88   2              error = ERROR_MAX;
-   89   2          }
-   90   1          if(error < ERROR_MIN) {
-   91   2              error = ERROR_MIN;
-   92   2          }
-   93   1          
-   94   1          // 7. 一阶低通滤波
-   95   1          error = low_pass_filter(error, last_error);
-   96   1          last_error = error;
-   97   1          
-   98   1          return error;
-   99   1      }
-  100          
-  101          /**
-  102           * @brief   获取当前误差值（不重新计算）
-  103           * @return  上一次计算的误差值
-  104           */
-  105          float Get_Last_Error(void) {
-  106   1          return last_error;
-  107   1      }
-  108          
-  109          /**
-  110           * @brief   重置误差滤波器
-  111           */
-  112          void Reset_Error_Filter(void) {
-  113   1          last_error = 0.0f;
-  114   1      }
+   75   1          // 累加所有值
+   76   1          sum = 0.0f;
+   77   1          for(i = 0; i < valid_count; i++) {
+   78   2              sum += error_buffer[i];
+   79   2          }
+   80   1          
+   81   1          // 减去一个最大值和一个最小值，剔除突变噪点
+   82   1          sum = sum - max_value - min_value;
+   83   1          
+   84   1          // 返回去极值后的平均偏差
+   85   1          return sum / (valid_count - 2);
+   86   1      }
+   87          
+   88          // ================== 6. 核心算法：计算赛道偏差 ==================
+   89          float Error_Calculate(float l1_n, float l2_n, float l3_n, float l4_n) {
+   90   1          float numerator;             // 公式分子
+   91   1          float denominator;           // 公式分母
+   92   1          float raw_error;             // 原始误差
+   93   1          float L1, L2, L3, L4;        // 比例化后的电感值
+   94   1          
+   95   1          // 【关键对接步】：将 sensor.c 传过来的 0~128 的整数范围，等比例压缩到 0.0~1.0 的小数区间
+   96   1          // 这是差比和算法的数学基础，保证各个电感的权重统一
+   97   1          L1 = l1_n / 128.0f;
+   98   1          L2 = l2_n / 128.0f;
+   99   1          L3 = l3_n / 128.0f;
+  100   1          L4 = l4_n / 128.0f;
+  101   1      
+  102   1          // 根据官方公式计算分子：A*(L1-L4) + B*(L2-L3)
+  103   1          numerator = COEFF_A * (L1 - L4) + COEFF_B * (L2 - L3);
+  104   1          
+  105   1          // 根据官方公式计算分母：A*(L1+L4) + C*|L2-L3|
+  106   1          denominator = COEFF_A * (L1 + L4) + COEFF_C * my_abs(L2 - L3);
+  107   1          
+  108   1          // 除零保护：如果车飞出赛道，电感全为0，分母极小，防止引发单片机硬件除零异常导致死机重启
+  109   1          if(denominator < 0.001f) {
+  110   2              raw_error = 0.0f; // 丢失赛道时，可以根据实际情况改为输出上一帧的误差 (或者保持直行)
+  111   2          } else {
+  112   2              // 算出原始偏差，并放大100倍，方便后续 PID 整数计算和观察
+  113   2              raw_error = (numerator * 100.0f) / denominator;
+  114   2          }
+  115   1          
+  116   1          // 绝对安全限幅：防止偏差过大导致舵机打死卡住齿轮
+  117   1          if(raw_error > ERROR_MAX) {
+  118   2              raw_error = ERROR_MAX;
+  119   2          }
+  120   1          if(raw_error < ERROR_MIN) {
+  121   2              raw_error = ERROR_MIN;
+  122   2          }
+  123   1          
+C251 COMPILER V5.60.0,  error                                                              30/03/26  21:58:37  PAGE 3   
+
+  124   1          // 经过滑动窗口滤波后，输出最终平滑的误差给舵机 PID 环
+  125   1          return remove_extremes_average_filter(raw_error);
+  126   1      }
+  127          
+  128          // 获取最近一次的误差值（如果需要在其他地方读取但不触发重新计算时使用）
+  129          float Get_Last_Error(void) {
+  130   1          unsigned char last_index;
+  131   1          if(buffer_index == 0) {
+  132   2              last_index = buffer_full ? (FILTER_WINDOW_SIZE - 1) : 0;
+  133   2          } else {
+  134   2              last_index = buffer_index - 1;
+  135   2          }
+  136   1          return error_buffer[last_index];
+  137   1      }
+  138          
+  139          // 冲出赛道或发生碰撞后，重置滤波器状态
+  140          void Reset_Error_Filter(void) {
+  141   1          unsigned char i;
+  142   1          for(i = 0; i < FILTER_WINDOW_SIZE; i++) {
+  143   2              error_buffer[i] = 0.0f;
+  144   2          }
+  145   1          buffer_index = 0;
+  146   1          buffer_full = 0;
+  147   1      }
 
 
 Module Information          Static   Overlayable
 ------------------------------------------------
-  code size            =       675     ------
+  code size            =      1288     ------
   ecode size           =    ------     ------
   data size            =    ------     ------
   idata size           =    ------     ------
   pdata size           =    ------     ------
-  xdata size           =        54     ------
-C251 COMPILER V5.60.0,  error                                                              01/03/26  18:13:44  PAGE 3   
-
+  xdata size           =        90     ------
   xdata-const size     =    ------     ------
   edata size           =    ------     ------
   bit size             =    ------     ------
@@ -146,7 +179,7 @@ Module Information          Static   Overlayable
   far data size        =    ------     ------
   huge data size       =    ------     ------
   const size           =    ------     ------
-  hconst size          =         9     ------
+  hconst size          =        12     ------
 End of Module Information.
 
 

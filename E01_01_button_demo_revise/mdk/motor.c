@@ -1,4 +1,4 @@
-#include "motor.h"
+/*#include "motor.h"
 #include "zf_driver_gpio.h"
 #include "zf_driver_pwm.h"
 
@@ -71,4 +71,4 @@ void Motor_Stop(void)
     pwm_set_duty(PWMA_CH2P_P22, 0);
     gpio_set_level(IO_P21, 1);
     gpio_set_level(IO_P23, 1);
-}
+}*/
