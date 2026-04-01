@@ -1,11 +1,11 @@
-C251 COMPILER V5.60.0,  error                                                              30/03/26  21:58:37  PAGE 1   
+C251 COMPILER V5.60.0,  error                                                              01/04/26  15:39:55  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE error
 OBJECT MODULE PLACED IN .\out_file\error.obj
-COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE error.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\.
-                    -.\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code)
-                    - DEBUG PRINT(.\out_file\error.lst) OBJECT(.\out_file\error.obj) 
+COMPILER INVOKED BY: D:\app_for_shuitong\keil\C251\BIN\C251.EXE error.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) B
+                    -ROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver
+                    -;..\user;..\code) DEBUG PRINT(.\out_file\error.lst) TABS(2) OBJECT(.\out_file\error.obj) 
 
 stmt  level    source
 
@@ -66,7 +66,7 @@ stmt  level    source
    55   1          if(valid_count < 3) {
    56   2              sum = 0.0f;
    57   2              for(i = 0; i < valid_count; i++) {
-C251 COMPILER V5.60.0,  error                                                              30/03/26  21:58:37  PAGE 2   
+C251 COMPILER V5.60.0,  error                                                              01/04/26  15:39:55  PAGE 2   
 
    58   3                  sum += error_buffer[i];
    59   3              }
@@ -134,7 +134,7 @@ stmt  level    source
   121   2              raw_error = ERROR_MIN;
   122   2          }
   123   1          
-C251 COMPILER V5.60.0,  error                                                              30/03/26  21:58:37  PAGE 3   
+C251 COMPILER V5.60.0,  error                                                              01/04/26  15:39:55  PAGE 3   
 
   124   1          // 经过滑动窗口滤波后，输出最终平滑的误差给舵机 PID 环
   125   1          return remove_extremes_average_filter(raw_error);

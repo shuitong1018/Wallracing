@@ -1,209 +1,299 @@
-/*********************************************************************************************************************
-* STC32G Opensourec Library å³ï¼ˆSTC32G å¼€æºåº“ï¼‰æ˜¯ä¸€ä¸ªåŸºäºå®˜æ–¹ SDK æ¥å£çš„ç¬¬ä¸‰æ–¹å¼€æºåº“
-* Copyright (c) 2022 SEEKFREE é€é£ç§‘æŠ€
-*
-* æœ¬æ–‡ä»¶æ˜¯STC å¼€æºåº“çš„ä¸€éƒ¨åˆ†
-*
-* STC32G å¼€æºåº“ æ˜¯å…è´¹è½¯ä»¶
-* æ‚¨å¯ä»¥æ ¹æ®è‡ªç”±è½¯ä»¶åŸºé‡‘ä¼šå‘å¸ƒçš„ GPLï¼ˆGNU General Public Licenseï¼Œå³ GNUé€šç”¨å…¬å…±è®¸å¯è¯ï¼‰çš„æ¡æ¬¾
-* å³ GPL çš„ç¬¬3ç‰ˆï¼ˆå³ GPL3.0ï¼‰æˆ–ï¼ˆæ‚¨é€‰æ‹©çš„ï¼‰ä»»ä½•åæ¥çš„ç‰ˆæœ¬ï¼Œé‡æ–°å‘å¸ƒå’Œ/æˆ–ä¿®æ”¹å®ƒ
-*
-* æœ¬å¼€æºåº“çš„å‘å¸ƒæ˜¯å¸Œæœ›å®ƒèƒ½å‘æŒ¥ä½œç”¨ï¼Œä½†å¹¶æœªå¯¹å…¶ä½œä»»ä½•çš„ä¿è¯
-* ç”šè‡³æ²¡æœ‰éšå«çš„é€‚é”€æ€§æˆ–é€‚åˆç‰¹å®šç”¨é€”çš„ä¿è¯
-* æ›´å¤šç»†èŠ‚è¯·å‚è§ GPL
-*
-* æ‚¨åº”è¯¥åœ¨æ”¶åˆ°æœ¬å¼€æºåº“çš„åŒæ—¶æ”¶åˆ°ä¸€ä»½ GPL çš„å‰¯æœ¬
-* å¦‚æœæ²¡æœ‰ï¼Œè¯·å‚é˜…<https://www.gnu.org/licenses/>
-*
-* é¢å¤–æ³¨æ˜ï¼š
-* æœ¬å¼€æºåº“ä½¿ç”¨ GPL3.0 å¼€æºè®¸å¯è¯åè®® ä»¥ä¸Šè®¸å¯ç”³æ˜ä¸ºè¯‘æ–‡ç‰ˆæœ¬
-* è®¸å¯ç”³æ˜è‹±æ–‡ç‰ˆåœ¨ libraries/doc æ–‡ä»¶å¤¹ä¸‹çš„ GPL3_permission_statement.txt æ–‡ä»¶ä¸­
-* è®¸å¯è¯å‰¯æœ¬åœ¨ libraries æ–‡ä»¶å¤¹ä¸‹ å³è¯¥æ–‡ä»¶å¤¹ä¸‹çš„ LICENSE æ–‡ä»¶
-* æ¬¢è¿å„ä½ä½¿ç”¨å¹¶ä¼ æ’­æœ¬ç¨‹åº ä½†ä¿®æ”¹å†…å®¹æ—¶å¿…é¡»ä¿ç•™é€é£ç§‘æŠ€çš„ç‰ˆæƒå£°æ˜ï¼ˆå³æœ¬å£°æ˜ï¼‰
-*
-* æ–‡ä»¶åç§°          
-* å…¬å¸åç§°          æˆéƒ½é€é£ç§‘æŠ€æœ‰é™å…¬å¸
-* ç‰ˆæœ¬ä¿¡æ¯          æŸ¥çœ‹ libraries/doc æ–‡ä»¶å¤¹å†… version æ–‡ä»¶ ç‰ˆæœ¬è¯´æ˜
-* å¼€å‘ç¯å¢ƒ          MDK FOR C251
-* é€‚ç”¨å¹³å°          STC32G
-* åº—é“ºé“¾æ¥          https://seekfree.taobao.com/
-*
-* ä¿®æ”¹è®°å½•
-* æ—¥æœŸ              ä½œè€…           å¤‡æ³¨
-* 2024-08-01        å¤§W            first version
-********************************************************************************************************************/
+#include "zf_common_headfile.h" 
+#include "config.h"
+#include "sensor.h"
+#include "path.h"
+#include "error.h"
 
-// *************************** ä¾‹ç¨‹æµ‹è¯•è¯´æ˜ ***************************
-// 1.æ ¸å¿ƒæ¿æ’åœ¨ä¸»æ¿ä¸Š ä¸»æ¿ä½¿ç”¨ç”µæ± ä¾›ç”µ ä¸‹è½½æœ¬ä¾‹ç¨‹
-//
-// 2.å¤ä½æ ¸å¿ƒæ¿ å¯¹åº”çš„å±å¹•å°±ä¼šæ˜¾ç¤ºæŒ‰é”®å€¼
-//
-// 3.ä»»æ„æŒ‰ä¸€ä¸ªæŒ‰é”®ï¼Œå±å¹•ä¸Šé¢æ˜¾ç¤ºçš„å€¼å°±ä¼šåŠ ä¸€
-//
-// å¦‚æœå‘ç°ç°è±¡ä¸è¯´æ˜ä¸¥é‡ä¸ç¬¦ è¯·å‚ç…§æœ¬æ–‡ä»¶æœ€ä¸‹æ–¹ ä¾‹ç¨‹å¸¸è§é—®é¢˜è¯´æ˜ è¿›è¡Œæ’æŸ¥
+#define MAX_DUTY           (30)                                                // ×î´óÕ¼¿Õ±È°Ù·Ö±È£¬·¶Î§Îª 0%~30%
 
-#include "zf_common_headfile.h"
+#define LED1               (IO_P52)
 
-#define GPIO_WAY 1		// 1-SEEKFREE V3åº“çš„æ–¹å¼æ“ä½œå¼•è„š
-						// 0-ä¼ ç»Ÿçš„ä½ç»‘å®šçš„æ–¹å¼æ“ä½œå¼•è„š
+#define PWM_R              (PWMA_CH4P_P26)                                     // ÓÒµç»ú PWM ¿ØÖÆÒı½Å¶¨Òå
+#define DIR_R              (IO_P51)                                            // ÓÒµç»ú·½Ïò¿ØÖÆÒı½Å¶¨Òå
 
-#if GPIO_WAY
-	// å®šä¹‰æŒ‰é”®å¼•è„š
-	#define KEY1_PIN    IO_P70
-	#define KEY2_PIN    IO_P71
-	#define KEY3_PIN    IO_P72
-	#define KEY4_PIN    IO_P73
-#else
-	// å®šä¹‰æŒ‰é”®å¼•è„š
-	#define KEY1_PIN    P70
-	#define KEY2_PIN    P71
-	#define KEY3_PIN    P72
-	#define KEY4_PIN    P73
-#endif
+#define PWM_L              (PWMA_CH3P_P24)                                     // ×óµç»ú PWM ¿ØÖÆÒı½Å¶¨Òå
+#define DIR_L              (IO_P50)                                            // ×óµç»ú·½Ïò¿ØÖÆÒı½Å¶¨Òå
 
-// å¼€å…³çŠ¶æ€å˜é‡
-uint8 key1_status = 1;
-uint8 key2_status = 1;
-uint8 key3_status = 1;
-uint8 key4_status = 1;
+#define ENCODER_R          (TIM3_ENCOEDER)                                     // ÓÒµç»ú±àÂëÆ÷¶¨Ê±Æ÷¶¨Òå
+#define ENCODER_DIR_R      (IO_P53)                                            // ÓÒµç»ú±àÂëÆ÷·½ÏòÒı½Å¶¨Òå
+#define ENCODER_COUNT_R    (TIM3_ENCOEDER_P04)                                 // ÓÒµç»ú±àÂëÆ÷¼ÆÊıÒı½Å¶¨Òå
 
-// ä¸Šä¸€æ¬¡å¼€å…³çŠ¶æ€å˜é‡
-uint8 key1_last_status;
-uint8 key2_last_status;
-uint8 key3_last_status;
-uint8 key4_last_status;
+#define ENCODER_L          (TIM0_ENCOEDER)                                     // ×óµç»ú±àÂëÆ÷¶¨Ê±Æ÷¶¨Òå
+#define ENCODER_DIR_L      (IO_P35)                                            // ×óµç»ú±àÂëÆ÷·½ÏòÒı½Å¶¨Òå
+#define ENCODER_COUNT_L    (TIM0_ENCOEDER_P34)                                 // ×óµç»ú±àÂëÆ÷¼ÆÊıÒı½Å¶¨Òå
 
-// å¼€å…³æ ‡å¿—ä½
-uint8 key1_flag;
-uint8 key2_flag;
-uint8 key3_flag;
-uint8 key4_flag;
+// È«¾Ö±äÁ¿
+float error_value = 0.0f;
+extern float L1_norm, L2_norm, L3_norm, L4_norm;  
 
-uint8 test1=0,test2=0,test3=0,test4=0;
+float duty_L = 0,duty_R = 0;                                                     // Õ¼¿Õ±È±äÁ¿£¬·¶Î§Îª -MAX_DUTY ~ MAX_DUTY£¬Õı¸º±íÊ¾·½Ïò
 
-void main()
+int16 right_encoder_data = 0;                                                  // ÓÒµç»ú±àÂëÆ÷¼ÆÊıÊı¾İ
+int16 left_encoder_data = 0;                                                   // ×óµç»ú±àÂëÆ÷¼ÆÊıÊı¾İ
+
+float Kp_L = 0.8, Kd_L = 0.1;                                                     // ×óµç»ú PID ¿ØÖÆ²ÎÊı
+float Kp_R = 0.9, Kd_R = 0.1;                                                     // ÓÒµç»ú PID ¿ØÖÆ²ÎÊı
+
+float error_L=0,error_R=0;
+/* ÉÏÒ»ÖÜÆÚµÄ£¨²âÁ¿-Ä¿±ê£©Îó²î£¬ÓÃÓÚ¼ÆËãÎ¢·ÖÏî£¨delta error£© */
+float prev_e_L = 0.0f, prev_e_R = 0.0f;
+
+float target_speed = 1;                                                     // Ä¿±êËÙ¶È±äÁ¿£¬µ¥Î»Îªm/s
+
+
+// ·½ÏòPID²ÎÊı
+float Kp_dir = 0.0f;
+float Kd_dir = 0.0f;
+float prev_e_dir = 0.0f;
+float dir_output = 0.0f;           
+
+//-------------------------------------------------------------------------------------------------------------------
+// ÏµÍ³³õÊ¼»¯
+//-------------------------------------------------------------------------------------------------------------------
+void System_Init(void)
 {
-    clock_init(SYSTEM_CLOCK_30M);
-	debug_init();
-
-#if GPIO_WAY
-	gpio_init(KEY1_PIN, GPI, 1, GPI_PULL_UP);
-	gpio_init(KEY2_PIN, GPI, 1, GPI_PULL_UP);
-	gpio_init(KEY3_PIN, GPI, 1, GPI_PULL_UP);
-	gpio_init(KEY4_PIN, GPI, 1, GPI_PULL_UP);
-#else
-	// åœ¨clock_initä¸­å·²ç»å°†æ‰€æœ‰çš„GPIOè®¾ç½®ä¸ºåŒå‘GPIOï¼Œæ—¢å¯ä»¥è¾“å…¥ä¹Ÿå¯ä»¥è¾“å‡ºã€‚
-#endif
+    // Öğ·É¿â±ØĞëµÄ³õÊ¼»¯
+    clock_init(SYSTEM_CLOCK_30M);      // ÏµÍ³Ê±ÖÓ³õÊ¼»¯Îª30MHz
+    debug_init();                       // µ÷ÊÔ´®¿Ú³õÊ¼»¯ - Õ¼ÓÃ P31(TX) ºÍ P30(RX)UARTÒı½Å
+    
+    // ¸÷Ä£¿é³õÊ¼»¯
+    Sensor_Init();
+    
+    //µç»úÄ£¿é³õÊ¼»¯
+    gpio_init(LED1, GPO, 1, GPO_PUSH_PULL);
 	
-//	oled_init();
-//	tft180_init();
-	ips114_init();
-//	ips200_spi_init();
-
-    // æ­¤å¤„ç¼–å†™ç”¨æˆ·ä»£ç  ä¾‹å¦‚å¤–è®¾åˆå§‹åŒ–ä»£ç ç­‰
-
-    while(1)
+	pwm_init(PWM_R, 1000, 0);      												// ³õÊ¼»¯ÓÒµç»ú PWM Òı½Å£¬ÆµÂÊÎª 1000 Hz£¬³õÊ¼Õ¼¿Õ±ÈÎª 0
+	gpio_init(DIR_R, GPO, 1, GPO_PUSH_PULL);  									// ³õÊ¼»¯ÓÒµç»ú·½Ïò¿ØÖÆÒı½ÅÎªÍÆÍìÊä³ö£¬³õÊ¼µçÆ½Îª 1
+				
+	pwm_init(PWM_L, 1000, 0);      												// ³õÊ¼»¯×óµç»ú PWM Òı½Å£¬ÆµÂÊÎª 1000 Hz£¬³õÊ¼Õ¼¿Õ±ÈÎª 0
+	gpio_init(DIR_L, GPO, 1, GPO_PUSH_PULL);  									// ³õÊ¼»¯×óµç»ú·½Ïò¿ØÖÆÒı½ÅÎªÍÆÍìÊä³ö£¬³õÊ¼µçÆ½Îª 1
+				
+	encoder_dir_init(ENCODER_R, ENCODER_DIR_R, ENCODER_COUNT_R);  				// ³õÊ¼»¯ÓÒµç»ú±àÂëÆ÷£¬Ö¸¶¨·½ÏòÒı½ÅºÍ¼ÆÊıÒı½Å
+	encoder_dir_init(ENCODER_L, ENCODER_DIR_L, ENCODER_COUNT_L);  				// ³õÊ¼»¯×óµç»ú±àÂëÆ÷£¬Ö¸¶¨·½ÏòÒı½ÅºÍ¼ÆÊıÒı½Å
+				
+	pwm_set_freq(PWM_R, 500, 5000);  											// ÉèÖÃÓÒµç»ú PWM ÆµÂÊÎª 500 Hz£¬Õ¼¿Õ±ÈÎª 50%£¨5000 ¶ÔÓ¦ 50%£©£¬ÓÃÓÚÇı¶¯Ğ£×¼Áãµã
+	pwm_set_freq(PWM_L, 500, 5000);  											// ÉèÖÃ×óµç»ú PWM ÆµÂÊÎª 500 Hz£¬Õ¼¿Õ±ÈÎª 50%£¨5000 ¶ÔÓ¦ 50%£©£¬ÓÃÓÚÇı¶¯Ğ£×¼Áãµã
+				
+	system_delay_ms(3000);  													// ÑÓ³Ù 3000 ms£¬µÈ´ıÇı¶¯°åÍê³ÉÁãµãĞ£×¼
+				
+	pwm_set_freq(PWM_R, 1000, 0);  												// »Ö¸´ÓÒµç»ú PWM ÆµÂÊÎª 1000 Hz£¬Õ¼¿Õ±ÈÎª 0£¬×¼±¸½øÈëÕı³£¿ØÖÆ
+	pwm_set_freq(PWM_L, 1000, 0);  												// »Ö¸´×óµç»ú PWM ÆµÂÊÎª 1000 Hz£¬Õ¼¿Õ±ÈÎª 0£¬×¼±¸½øÈëÕı³£¿ØÖÆ
+	
+	// ´Ë´¦±àĞ´ÓÃ»§´úÂë ÀıÈçÍâÉè³õÊ¼»¯´úÂëµÈ
+	pit_ms_init(TIM1_PIT, 10);													// ³õÊ¼»¯ PIT ¶¨Ê±Æ÷,¶¨Ê±ÖÜÆÚÎª 5 ms
+	// ³õÊ¼»¯ÎŞÏß´®¿Ú
+    if(wireless_uart_init())
     {
-		// æ­¤å¤„ç¼–å†™éœ€è¦å¾ªç¯æ‰§è¡Œçš„ä»£ç 
-		
-
-        
-        // ä½¿ç”¨æ­¤æ–¹æ³•ä¼˜ç‚¹åœ¨äºï¼Œä¸éœ€è¦ä½¿ç”¨while(1) ç­‰å¾…ï¼Œé¿å…å¤„ç†å™¨èµ„æºæµªè´¹
-        // ä¿å­˜æŒ‰é”®çŠ¶æ€
-        key1_last_status = key1_status;
-        key2_last_status = key2_status;
-        key3_last_status = key3_status;
-        key4_last_status = key4_status;
-		
-		
-#if GPIO_WAY
-		// è¯»å–å½“å‰æŒ‰é”®çŠ¶æ€
-        key1_status = gpio_get_level(KEY1_PIN);
-        key2_status = gpio_get_level(KEY2_PIN);
-        key3_status = gpio_get_level(KEY3_PIN);
-        key4_status = gpio_get_level(KEY4_PIN);
-#else
-		// è¯»å–å½“å‰æŒ‰é”®çŠ¶æ€
-        key1_status = KEY1_PIN;
-        key2_status = KEY2_PIN;
-        key3_status = KEY3_PIN;
-        key4_status = KEY4_PIN;
-#endif
-
-
-        
-        //æ£€æµ‹åˆ°æŒ‰é”®æŒ‰ä¸‹ä¹‹å  å¹¶æ”¾å¼€ç½®ä½æ ‡å¿—ä½
-        if(key1_status && !key1_last_status)    key1_flag = 1;
-        if(key2_status && !key2_last_status)    key2_flag = 1;
-        if(key3_status && !key3_last_status)    key3_flag = 1;
-        if(key4_status && !key4_last_status)    key4_flag = 1;
-        
-        //æ ‡å¿—ä½ç½®ä½ä¹‹åï¼Œå¯ä»¥ä½¿ç”¨æ ‡å¿—ä½æ‰§è¡Œè‡ªå·±æƒ³è¦åšçš„äº‹ä»¶
-        if(key1_flag)   
-        {
-            key1_flag = 0;//ä½¿ç”¨æŒ‰é”®ä¹‹åï¼Œåº”è¯¥æ¸…é™¤æ ‡å¿—ä½
-            test1++;
-        }
-        
-        if(key2_flag)   
-        {
-            key2_flag = 0;//ä½¿ç”¨æŒ‰é”®ä¹‹åï¼Œåº”è¯¥æ¸…é™¤æ ‡å¿—ä½
-            test2++;
-        }
-        
-        if(key3_flag)   
-        {
-            key3_flag = 0;//ä½¿ç”¨æŒ‰é”®ä¹‹åï¼Œåº”è¯¥æ¸…é™¤æ ‡å¿—ä½
-            test3++;
-        }
-        
-        if(key4_flag)   
-        {
-            key4_flag = 0;//ä½¿ç”¨æŒ‰é”®ä¹‹åï¼Œåº”è¯¥æ¸…é™¤æ ‡å¿—ä½
-            test4++;
-        }
-        
-//        // åœ¨OLEDå±å¹•ä¸Šæ˜¾ç¤ºæµ‹è¯•å˜é‡ï¼Œéœ€è¦åˆå§‹åŒ–OLEDå±å¹•ï¼Œæ‰èƒ½ä½¿ç”¨ã€‚
-//        oled_show_string(0 , 0, "KEY1 TEST:");   oled_show_int(11*8, 0, test1, 3);
-//        oled_show_string(0 , 1, "KEY2 TEST:");   oled_show_int(11*8, 1, test2, 3);
-//        oled_show_string(0 , 2, "KEY3 TEST:");   oled_show_int(11*8, 2, test3, 3);
-//        oled_show_string(0 , 3, "KEY4 TEST:");   oled_show_int(11*8, 3, test4, 3);
-
-
-
-//        // åœ¨1.8å¯¸TFTå±å¹•ä¸Šæ˜¾ç¤ºæµ‹è¯•å˜é‡ï¼Œéœ€è¦åˆå§‹åŒ–1.8å¯¸TFTå±å¹•ï¼Œæ‰èƒ½ä½¿ç”¨ã€‚
-//        tft180_show_string(0 , 0*16, "KEY1 TEST:");   tft180_show_uint8(11*8, 0*16, test1);
-//        tft180_show_string(0 , 1*16, "KEY2 TEST:");   tft180_show_uint8(11*8, 1*16, test2);
-//        tft180_show_string(0 , 2*16, "KEY3 TEST:");   tft180_show_uint8(11*8, 2*16, test3);
-//        tft180_show_string(0 , 3*16, "KEY4 TEST:");   tft180_show_uint8(11*8, 3*16, test4);
-
-		
-		
-        // åœ¨1.14å¯¸IPSå±å¹•ä¸Šæ˜¾ç¤ºæµ‹è¯•å˜é‡ï¼Œéœ€è¦åˆå§‹åŒ–1.14å¯¸IPSå±å¹•ï¼Œæ‰èƒ½ä½¿ç”¨ã€‚
-        ips114_show_string(0 , 0*16, "KEY1 TEST:");   ips114_show_uint8(11*8, 0*16, test1);
-        ips114_show_string(0 , 1*16, "KEY2 TEST:");   ips114_show_uint8(11*8, 1*16, test2);
-        ips114_show_string(0 , 2*16, "KEY3 TEST:");   ips114_show_uint8(11*8, 2*16, test3);
-        ips114_show_string(0 , 3*16, "KEY4 TEST:");   ips114_show_uint8(11*8, 3*16, test4);
-		
-		
-//        // åœ¨2å¯¸IPSå±å¹•ä¸Šæ˜¾ç¤ºæµ‹è¯•å˜é‡ï¼Œéœ€è¦åˆå§‹åŒ–2å¯¸IPSå±å¹•ï¼Œæ‰èƒ½ä½¿ç”¨ã€‚
-//        ips200_show_string(0 , 0*16, "KEY1 TEST:");   ips200_show_uint8(11*8, 0*16, test1);
-//        ips200_show_string(0 , 1*16, "KEY2 TEST:");   ips200_show_uint8(11*8, 1*16, test2);
-//        ips200_show_string(0 , 2*16, "KEY3 TEST:");   ips200_show_uint8(11*8, 2*16, test3);
-//        ips200_show_string(0 , 3*16, "KEY4 TEST:");   ips200_show_uint8(11*8, 3*16, test4);
-
-        // æ­¤å¤„ç¼–å†™éœ€è¦å¾ªç¯æ‰§è¡Œçš„ä»£ç 
+        // ³õÊ¼»¯Ê§°ÜÊ±¿ÉÒÔÔÚ´Ë´¦Àí£¨µ±Ç°½ö¼òµ¥¶Ï¿ªÑ­»·£©
+        while(1);
     }
+		
+		
+    system_delay_ms(100);                
 }
 
-// *************************** ä¾‹ç¨‹å¸¸è§é—®é¢˜è¯´æ˜ ***************************
-// é‡åˆ°é—®é¢˜æ—¶è¯·æŒ‰ç…§ä»¥ä¸‹é—®é¢˜æ£€æŸ¥åˆ—è¡¨æ£€æŸ¥
-//
-// é—®é¢˜1ï¼šS1-S4 æŒ‰ä¸‹ å±å¹•æ•°å€¼ä¸å¢åŠ 
-//      å¦‚æœä½¿ç”¨ä¸»æ¿æµ‹è¯•ï¼Œä¸»æ¿å¿…é¡»è¦ç”¨ç”µæ± ä¾›ç”µ
-//      æŸ¥çœ‹ç¨‹åºæ˜¯å¦æ­£å¸¸çƒ§å½•ï¼Œæ˜¯å¦ä¸‹è½½æŠ¥é”™ï¼Œç¡®è®¤æ­£å¸¸æŒ‰ä¸‹å¤ä½æŒ‰é”®
-//      ä¸‡ç”¨è¡¨æ£€æŸ¥å¯¹åº” S1-S4 å¼•è„šç”µå‹æ˜¯å¦æ­£å¸¸å˜åŒ–ï¼Œæ˜¯å¦è·Ÿæ¥å…¥ä¿¡å·ä¸ç¬¦ï¼Œå¼•è„šæ˜¯å¦æ¥é”™
-//
-// é—®é¢˜2ï¼šå±å¹•ä¸äº®æˆ–è€…å±å¹•æ˜¾ç¤ºæœ‰é—®é¢˜
-//		æŸ¥çœ‹å±å¹•åˆå§‹åŒ–æ˜¯å¦æ­£ç¡®
-// 		æŸ¥çœ‹å±å¹•æ˜¯å¦æ’å¥½
+//ËÙ¶È»·Ïà¹Øº¯ÊıÉùÃ÷
+void speed_control();
+void speed_get();
+void speed_calculate();
+void speed_out();
+
+//µ÷ÊÔº¯ÊıÉùÃ÷
+void data_show();
+
+//×ªÏò»·Ïà¹Øº¯ÊıÉùÃ÷
+void dir_get();
+void dir_calculate();
+void dir_control();
+
+//Ñ²Ïßº¯Êı
+void patrol_line();
+
+//-------------------------------------------------------------------------------------------------------------------
+// Ö÷º¯Êı
+//-------------------------------------------------------------------------------------------------------------------
+void main(void)
+{
+    
+    System_Init();
+	
+	  tim1_irq_handler = patrol_line;
+    while(1)
+    {
+    // ¶ÁÈ¡´«¸ĞÆ÷
+	 	//Sensor_Read_Normalized();
+	// 	Sensor_Monitor();
+	
+    //     // ¼ÆËãÎó²î
+     //error_value = Error_Calculate(L1_norm, L2_norm, L3_norm, L4_norm);
+		//printf("the error is %.2f\r\n",error_value);
+		data_show();
+		system_delay_ms(100);  
+	}
+}
+        
+        // Ö´ĞĞ¿ØÖÆ
+        /*switch(action)
+        {
+            case ACTION_TRACKING:
+                // Õı³£Ñ­¼£
+                left_speed = BASE_SPEED_NORMAL + error_value;
+                right_speed = BASE_SPEED_NORMAL - error_value;
+                Motor_Control(left_speed, right_speed);
+                break;
+                
+            case ACTION_TRACKING_FAST:
+                // ¿ìËÙÑ­¼££¨ÈçÕÛÏß£©
+                left_speed = BASE_SPEED_FAST + error_value * 2;
+                right_speed = BASE_SPEED_FAST - error_value * 2;
+                Motor_Control(left_speed, right_speed);
+                break;
+                
+            case ACTION_TURN_LEFT_HARD:
+                // ¼±×ó×ª£¨Ö±½Ç£©
+                Motor_SetLeft(300);    // 30%Õ¼¿Õ±È
+                Motor_SetRight(700);   // 70%Õ¼¿Õ±È
+                break;
+                
+            case ACTION_TURN_RIGHT_HARD:
+                // ¼±ÓÒ×ª£¨Ö±½Ç£©
+                Motor_SetLeft(700);
+                Motor_SetRight(300);
+                break;
+                
+            case ACTION_TURN_LEFT_SMOOTH:
+                // Æ½»¬×ó×ª£¨Ô²ĞÎÍä£©
+                Motor_SetLeft(400);
+                Motor_SetRight(600);
+                break;
+                
+            case ACTION_TURN_RIGHT_SMOOTH:
+                // Æ½»¬ÓÒ×ª£¨Ô²ĞÎÍä£©
+                Motor_SetLeft(600);
+                Motor_SetRight(400);
+                break;
+                
+            case ACTION_ROUNDABOUT:
+                // »·µºÄ£Ê½
+                Motor_SetLeft(450);
+                Motor_SetRight(550);
+                break;
+                
+            default:
+                Motor_Stop();
+                break;
+        }*/
+        
+void dir_get(){
+    // ¶ÁÈ¡´«¸ĞÆ÷
+		Sensor_Read_Normalized();
+		//Sensor_Monitor();
+	
+    // ¼ÆËãÎó²î
+    error_value = Error_Calculate(L1_norm, L2_norm, L3_norm, L4_norm);
+}
+
+void dir_calculate(){
+    float e = error_value; // µ±Ç°Îó²î
+    
+    dir_output = Kp_dir * e + Kd_dir * (e - prev_e_dir);
+    
+    // ÏŞ·ù¿ØÖÆÁ¿
+    if (dir_output > 3.0f) dir_output = 3.0f;
+    if (dir_output < -3.0f) dir_output = -3.0f;
+    
+    prev_e_dir = e;
+}
+
+void dir_control(){
+    dir_get();
+    dir_calculate();
+}
+
+void patrol_line(){
+    dir_control();
+    speed_control();
+    duty_L += dir_output; // ½«·½Ïò¿ØÖÆÊä³öµş¼Óµ½×óÂÖÕ¼¿Õ±È
+    duty_R -= dir_output; // ½«·½Ïò¿ØÖÆÊä³öµş¼Óµ½ÓÒÂÖÕ¼¿Õ±È
+	  if (duty_L >= MAX_DUTY) duty_L = MAX_DUTY;
+    if (duty_L <= -MAX_DUTY) duty_L = -MAX_DUTY;
+	  if (duty_R >= MAX_DUTY) duty_R = MAX_DUTY;
+    if (duty_R <= -MAX_DUTY) duty_R = -MAX_DUTY;
+    speed_out();
+}
+	
+void speed_control(){
+     speed_get();
+     speed_calculate();
+     
+   //data_show();
+}
+
+void speed_get(){
+    right_encoder_data = encoder_get_count(ENCODER_R);    // »ñÈ¡ÓÒµç»ú±àÂëÆ÷¼ÆÊıÊı¾İ
+    left_encoder_data  = -encoder_get_count(ENCODER_L);    // »ñÈ¡×óµç»ú±àÂëÆ÷¼ÆÊıÊı¾İ
+
+    encoder_clear_count(ENCODER_R);    // ÇåÁãÓÒµç»ú±àÂëÆ÷¼ÆÊı
+    encoder_clear_count(ENCODER_L);    // ÇåÁã×óµç»ú±àÂëÆ÷¼ÆÊı
+}
+
+void speed_calculate(){
+	
+            float eL = (float)(target_speed - left_encoder_data*0.003518);   // µ±Ç°Îó²î£¨×ó£©
+            float eR = (float)(target_speed - right_encoder_data*0.003518);  // µ±Ç°Îó²î£¨ÓÒ£©
+
+            // ×óÂÖ£º±ÈÀı + Î¢·Ö
+            error_L = Kp_L * (eL) + Kd_L * (eL - prev_e_L) ;
+            // ÏŞ·ù¿ØÖÆÁ¿£¬±£³ÖÓëÔ­Âß¼­Ò»ÖÂµÄÏŞ·ù ¡À3
+            if (error_L > 3.0f) error_L = 3.0f;
+            if (error_L < -3.0f) error_L = -3.0f;
+            duty_L += error_L;
+            
+
+            // ÓÒÂÖ£º±ÈÀı + Î¢·Ö
+            error_R = Kp_R * (eR) + Kd_R * (eR - prev_e_R);
+            if (error_R > 3.0f) error_R = 3.0f;
+            if (error_R < -3.0f) error_R = -3.0f;
+            duty_R += error_R;
+            if (duty_R >= MAX_DUTY) duty_R = MAX_DUTY;
+            if (duty_R <= -MAX_DUTY) duty_R = -MAX_DUTY;
+
+            // ±£´æ±¾ÖÜÆÚÎó²îÒÔ±ãÏÂ´Î¼ÆËãÎ¢·ÖÏî
+            prev_e_L = eL;
+            prev_e_R = eR;
+}
+
+void speed_out(){
+    if(duty_L >= 0)                                                          			// µ±Õ¼¿Õ±ÈÎª·Ç¸ºÊıÊ±£¬µç»úÕı×ª
+    {
+        pwm_set_duty(PWM_L, (int32)(duty_L * (PWM_DUTY_MAX / 100)) + (PWM_DUTY_MAX / 10));     // ¼ÆËã²¢Êä³öÕ¼¿Õ±È£¨¼ÓÉÏ 10% ĞÅºÅËÀÇø£©
+        gpio_set_level(DIR_L, 1);                                          			// Êä³öµç»úĞı×ª·½ÏòĞÅºÅ
+    }
+    else                                                                   			// µç»ú·´×ª
+    {
+        pwm_set_duty(PWM_L, (int32)((-duty_L) * (PWM_DUTY_MAX / 100)) + (PWM_DUTY_MAX / 10));  // ¼ÆËã²¢Êä³öÕ¼¿Õ±È£¨¼ÓÉÏ 10% ĞÅºÅËÀÇø£©
+        gpio_set_level(DIR_L, 1);                                          			// Êä³öµç»úĞı×ª·½ÏòĞÅºÅ
+                                                			// Êä³öµç»úĞı×ª·½ÏòĞÅºÅ
+    }
+    if(duty_R >= 0)                                                          			// µ±Õ¼¿Õ±ÈÎª·Ç¸ºÊıÊ±£¬µç»úÕı×ª
+    {
+        pwm_set_duty(PWM_R, (int32)(duty_R * (PWM_DUTY_MAX / 100)) + (PWM_DUTY_MAX / 10));     // ¼ÆËã²¢Êä³öÕ¼¿Õ±È£¨¼ÓÉÏ 10% ĞÅºÅËÀÇø£©
+        gpio_set_level(DIR_R, 0);                                          			// Êä³öµç»úĞı×ª·½ÏòĞÅºÅ
+    }
+    else                                                                   			// µç»ú·´×ª
+    {
+        pwm_set_duty(PWM_R, (int32)((-duty_R) * (PWM_DUTY_MAX / 100)) + (PWM_DUTY_MAX / 10));  // ¼ÆËã²¢Êä³öÕ¼¿Õ±È£¨¼ÓÉÏ 10% ĞÅºÅËÀÇø£©
+        gpio_set_level(DIR_R, 0);                                         			// Êä³öµç»úĞı×ª·½ÏòĞÅºÅ
+    }
+}
+void data_show(){
+    char buf[128];
+
+    // ¸ñÊ½»¯²¢Í¨¹ıÎŞÏß´®¿Ú·¢ËÍ
+    sprintf(buf, "%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.003518,error_value);
+    wireless_uart_send_string(buf);
+
+   // sprintf(buf, "duty_L:%d error_L:%.2f duty_R:%d error_R:%.2f\r\n", duty_L, error_L, duty_R, error_R);
+   // wireless_uart_send_string(buf);
+
+}

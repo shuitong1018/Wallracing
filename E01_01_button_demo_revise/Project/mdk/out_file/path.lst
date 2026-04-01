@@ -1,11 +1,11 @@
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 1   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 1   
 
 
 C251 COMPILER V5.60.0, COMPILATION OF MODULE path
 OBJECT MODULE PLACED IN .\out_file\path.obj
-COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE path.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\..
-                    -\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code) 
-                    -DEBUG PRINT(.\out_file\path.lst) OBJECT(.\out_file\path.obj) 
+COMPILER INVOKED BY: D:\app_for_shuitong\keil\C251\BIN\C251.EXE path.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BR
+                    -OWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;
+                    -..\user;..\code) DEBUG PRINT(.\out_file\path.lst) TABS(2) OBJECT(.\out_file\path.obj) 
 
 stmt  level    source
 
@@ -66,7 +66,7 @@ stmt  level    source
    55              int circle_counter;
    56              int roundabout_edge_counter;
    57              int lost_line_counter;
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 2   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 2   
 
    58              int straight_counter;
    59              
@@ -134,7 +134,7 @@ stmt  level    source
   121                  controller.history[i].values[0] = 0;
   122                  controller.history[i].values[1] = 0;
   123                  controller.history[i].values[2] = 0;
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 3   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 3   
 
   124                  controller.history[i].values[3] = 0;
   125                  controller.history[i].error = 0;
@@ -202,7 +202,7 @@ stmt  level    source
   187                  controller.lost_line_counter = 0;
   188              }
   189              
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 4   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 4   
 
   190              // 2. 检测十字路口（四个电感都有较强信号）
   191              if(detect_crossroad(L1, L2, L3, L4)) {
@@ -270,7 +270,7 @@ stmt  level    source
   253                      L3 < THRESHOLD_LOST_LINE && L4 < THRESHOLD_LOST_LINE);
   254          }
   255          
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 5   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 5   
 
   256          //==============================================================================
   257          // 检测十字路口
@@ -338,7 +338,7 @@ stmt  level    source
   319          
   320          //==============================================================================
   321          // 检测折线
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 6   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 6   
 
   322          //==============================================================================
   323          static int detect_zigzag(float L1, float L2, float L3, float L4, float error)
@@ -406,7 +406,7 @@ stmt  level    source
   383              float left_strength = L1 + L2;
   384              float right_strength = L3 + L4;
   385              
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 7   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 7   
 
   386              if(left_strength > right_strength + THRESHOLD_SIDE_DIFF) {
   387                  return -1;  // 左偏
@@ -474,7 +474,7 @@ stmt  level    source
   449              float error = Error_Calculate(L1, L2, L3, L4);
   450              
   451              if(error < -ERROR_STRAIGHT_THRESHOLD) {
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 8   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 8   
 
   452                  return DIR_LEFT;
   453              } else if(error > ERROR_STRAIGHT_THRESHOLD) {
@@ -542,7 +542,7 @@ stmt  level    source
   515                      if(controller.angle_counter > ANGLE_COUNT_MAX || 
   516                         (my_abs(error) < ERROR_STRAIGHT_THRESHOLD && controller.angle_counter > 15)) {
   517                          controller.angle_counter = 0;
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 9   
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 9   
 
   518                      }
   519                      break;
@@ -610,7 +610,7 @@ stmt  level    source
   581                          controller.roundabout_edge_count = 0;
   582                          controller.roundabout_entry_error = error;
   583                      }
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 10  
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 10  
 
   584                      
   585                      // 环岛内循迹
@@ -678,7 +678,7 @@ stmt  level    source
   647              return action;
   648          }
   649          
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 11  
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 11  
 
   650          //==============================================================================
   651          // 获取当前路径名称
@@ -746,7 +746,7 @@ stmt  level    source
   713                  case PATH_LEFT_ANGLE:
   714                  case PATH_RIGHT_ANGLE:
   715                      return 0.4f;      // 40%速度
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 12  
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 12  
 
   716                  case PATH_ZIGZAG:
   717                      return 0.35f;     // 35%速度
@@ -815,7 +815,7 @@ Module Information          Static   Overlayable
   bitaddressable size  =    ------     ------
   ebitaddressable size =    ------     ------
   far data size        =    ------     ------
-C251 COMPILER V5.60.0,  path                                                               30/03/26  21:58:37  PAGE 13  
+C251 COMPILER V5.60.0,  path                                                               01/04/26  15:39:55  PAGE 13  
 
   huge data size       =    ------     ------
   const size           =    ------     ------

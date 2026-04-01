@@ -38,9 +38,11 @@
 ".\out_file\zf_device_wireless_uart.obj",
 ".\out_file\sensor.obj",
 ".\out_file\path.obj",
+".\out_file\filter.obj",
 ".\out_file\error.obj",
-".\out_file\main.obj",
-".\out_file\isr.obj" 
+".\out_file\motor.obj",
+".\out_file\isr.obj",
+".\out_file\main.obj" 
 TO ".\out_file\SEEKFREE" 
 PRINT(".\out_file\SEEKFREE.map") CASE DISABLEWARNING (57,16) 
 REMOVEUNUSED 

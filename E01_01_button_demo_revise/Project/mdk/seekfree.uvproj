@@ -784,21 +784,6 @@
               <FileType>5</FileType>
               <FilePath>.\motor.h</FilePath>
             </File>
-            <File>
-              <FileName>main.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\main.c</FilePath>
-            </File>
-            <File>
-              <FileName>my_function.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\my_function.c</FilePath>
-            </File>
-            <File>
-              <FileName>my_function.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\my_function.h</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>
@@ -813,6 +798,11 @@
               <FileName>isr.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\isr.h</FilePath>
+            </File>
+            <File>
+              <FileName>main.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\main.c</FilePath>
             </File>
           </Files>
         </Group>
