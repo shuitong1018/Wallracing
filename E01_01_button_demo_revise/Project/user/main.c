@@ -21,29 +21,31 @@
 #define ENCODER_L          (TIM0_ENCOEDER)                                     // 左电机编码器定时器定义
 #define ENCODER_DIR_L      (IO_P35)                                            // 左电机编码器方向引脚定义
 #define ENCODER_COUNT_L    (TIM0_ENCOEDER_P34)                                 // 左电机编码器计数引脚定义
+#define DEADZONE_L  1500  // 左轮死区补偿 15%
+#define DEADZONE_R  1350  // 右轮死区补偿 13% (右轮较灵敏，给少点)
 
 // 全局变量
 float error_value = 0.0f;
 extern float L1_norm, L2_norm, L3_norm, L4_norm;  
 
-float duty_L = 0,duty_R = 0;                                                     // 占空比变量，范围为 -MAX_DUTY ~ MAX_DUTY，正负表示方向
+float duty_L = 0,duty_R = 0;                                                     // 速度环输出的占空比
 
 int16 right_encoder_data = 0;                                                  // 右电机编码器计数数据
 int16 left_encoder_data = 0;                                                   // 左电机编码器计数数据
 
-float Kp_L = 0.8, Kd_L = 0.1;                                                     // 左电机 PID 控制参数
-float Kp_R = 0.9, Kd_R = 0.1;                                                     // 右电机 PID 控制参数
+float Kp_L = 0.015, Kd_L = 2.2;                                                     // 左电机 PID 控制参数
+float Kp_R = 0.04, Kd_R = 1.9;                                                     // 右电机 PID 控制参数
 
 float error_L=0,error_R=0;
 /* 上一周期的（测量-目标）误差，用于计算微分项（delta error） */
 float prev_e_L = 0.0f, prev_e_R = 0.0f;
 
-float target_speed = 1;                                                     // 目标速度变量，单位为m/s
-
+float target_speed = 0.5;                                                     // 目标速度变量，单位为m/s
+float target_speed_L = 0,target_speed_R = 0;                                // 左右轮目标速度变量，单位为m/s   
 
 // 方向PID参数
-float Kp_dir = 0.0f;
-float Kd_dir = 0.0f;
+float Kp_dir = 0.006f;
+float Kd_dir = 0.025f;
 float prev_e_dir = 0.0f;
 float dir_output = 0.0f;           
 
@@ -56,7 +58,7 @@ void System_Init(void)
     clock_init(SYSTEM_CLOCK_30M);      // 系统时钟初始化为30MHz
     debug_init();                       // 调试串口初始化 - 占用 P31(TX) 和 P30(RX)UART引脚
     
-    // 各模块初始化
+    // 传感器模块初始化
     Sensor_Init();
     
     //电机模块初始化
@@ -80,7 +82,7 @@ void System_Init(void)
 	pwm_set_freq(PWM_L, 1000, 0);  												// 恢复左电机 PWM 频率为 1000 Hz，占空比为 0，准备进入正常控制
 	
 	// 此处编写用户代码 例如外设初始化代码等
-	pit_ms_init(TIM1_PIT, 10);													// 初始化 PIT 定时器,定时周期为 5 ms
+	pit_ms_init(TIM1_PIT, 5);													// 初始化 PIT 定时器,定时周期为 5 ms
 	// 初始化无线串口
     if(wireless_uart_init())
     {
@@ -128,7 +130,7 @@ void main(void)
      //error_value = Error_Calculate(L1_norm, L2_norm, L3_norm, L4_norm);
 		//printf("the error is %.2f\r\n",error_value);
 		data_show();
-		system_delay_ms(100);  
+		system_delay_ms(80);  
 	}
 }
         
@@ -194,13 +196,14 @@ void dir_get(){
 }
 
 void dir_calculate(){
-    float e = error_value; // 当前误差
-    
+    float e = error_value;
+
+    // 非线性Kp
     dir_output = Kp_dir * e + Kd_dir * (e - prev_e_dir);
     
     // 限幅控制量
-    if (dir_output > 3.0f) dir_output = 3.0f;
-    if (dir_output < -3.0f) dir_output = -3.0f;
+    if (dir_output > 1.0f) dir_output = 1.0f;
+    if (dir_output < -1.0f) dir_output = -1.0f;
     
     prev_e_dir = e;
 }
@@ -212,21 +215,16 @@ void dir_control(){
 
 void patrol_line(){
     dir_control();
+    target_speed_L = target_speed - dir_output; // 将方向控制输出叠加到左轮占空比
+    target_speed_R = target_speed + dir_output; // 将方向控制输出叠加到右轮占空比
     speed_control();
-    duty_L += dir_output; // 将方向控制输出叠加到左轮占空比
-    duty_R -= dir_output; // 将方向控制输出叠加到右轮占空比
-	  if (duty_L >= MAX_DUTY) duty_L = MAX_DUTY;
-    if (duty_L <= -MAX_DUTY) duty_L = -MAX_DUTY;
-	  if (duty_R >= MAX_DUTY) duty_R = MAX_DUTY;
-    if (duty_R <= -MAX_DUTY) duty_R = -MAX_DUTY;
-    speed_out();
+    
 }
 	
 void speed_control(){
      speed_get();
      speed_calculate();
-     
-   //data_show();
+	   speed_out();
 }
 
 void speed_get(){
@@ -239,8 +237,8 @@ void speed_get(){
 
 void speed_calculate(){
 	
-            float eL = (float)(target_speed - left_encoder_data*0.003518);   // 当前误差（左）
-            float eR = (float)(target_speed - right_encoder_data*0.003518);  // 当前误差（右）
+            float eL = (float)(target_speed_L - left_encoder_data*0.003518);   // 当前误差（左）
+            float eR = (float)(target_speed_R - right_encoder_data*0.003518);  // 当前误差（右）
 
             // 左轮：比例 + 微分
             error_L = Kp_L * (eL) + Kd_L * (eL - prev_e_L) ;
@@ -248,7 +246,8 @@ void speed_calculate(){
             if (error_L > 3.0f) error_L = 3.0f;
             if (error_L < -3.0f) error_L = -3.0f;
             duty_L += error_L;
-            
+						if (duty_L >= MAX_DUTY) duty_L = MAX_DUTY;
+            if (duty_L <= -MAX_DUTY) duty_L = -MAX_DUTY;
 
             // 右轮：比例 + 微分
             error_R = Kp_R * (eR) + Kd_R * (eR - prev_e_R);
@@ -266,31 +265,31 @@ void speed_calculate(){
 void speed_out(){
     if(duty_L >= 0)                                                          			// 当占空比为非负数时，电机正转
     {
-        pwm_set_duty(PWM_L, (int32)(duty_L * (PWM_DUTY_MAX / 100)) + (PWM_DUTY_MAX / 10));     // 计算并输出占空比（加上 10% 信号死区）
+        pwm_set_duty(PWM_L, (int32)(duty_L * (PWM_DUTY_MAX / 100)) + DEADZONE_L);     // 计算并输出占空比（加上 信号死区）
         gpio_set_level(DIR_L, 1);                                          			// 输出电机旋转方向信号
     }
     else                                                                   			// 电机反转
     {
-        pwm_set_duty(PWM_L, (int32)((-duty_L) * (PWM_DUTY_MAX / 100)) + (PWM_DUTY_MAX / 10));  // 计算并输出占空比（加上 10% 信号死区）
-        gpio_set_level(DIR_L, 1);                                          			// 输出电机旋转方向信号
+        pwm_set_duty(PWM_L, (int32)((-duty_L) * (PWM_DUTY_MAX / 100)) + DEADZONE_L);  // 计算并输出占空比（加上 信号死区）
+        gpio_set_level(DIR_L, 0);                                          			// 输出电机旋转方向信号
                                                 			// 输出电机旋转方向信号
     }
     if(duty_R >= 0)                                                          			// 当占空比为非负数时，电机正转
     {
-        pwm_set_duty(PWM_R, (int32)(duty_R * (PWM_DUTY_MAX / 100)) + (PWM_DUTY_MAX / 10));     // 计算并输出占空比（加上 10% 信号死区）
+        pwm_set_duty(PWM_R, (int32)(duty_R * (PWM_DUTY_MAX / 100)) + DEADZONE_R);     // 计算并输出占空比（加上 信号死区）
         gpio_set_level(DIR_R, 0);                                          			// 输出电机旋转方向信号
     }
     else                                                                   			// 电机反转
     {
-        pwm_set_duty(PWM_R, (int32)((-duty_R) * (PWM_DUTY_MAX / 100)) + (PWM_DUTY_MAX / 10));  // 计算并输出占空比（加上 10% 信号死区）
-        gpio_set_level(DIR_R, 0);                                         			// 输出电机旋转方向信号
+        pwm_set_duty(PWM_R, (int32)((-duty_R) * (PWM_DUTY_MAX / 100)) + DEADZONE_R);  // 计算并输出占空比（加上 信号死区）
+        gpio_set_level(DIR_R, 1);                                         			// 输出电机旋转方向信号
     }
 }
 void data_show(){
     char buf[128];
 
     // 格式化并通过无线串口发送
-    sprintf(buf, "%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.003518,error_value);
+    sprintf(buf, "%.2f,%.2f,%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.003518,target_speed_R,target_speed_L,dir_output);
     wireless_uart_send_string(buf);
 
    // sprintf(buf, "duty_L:%d error_L:%.2f duty_R:%d error_R:%.2f\r\n", duty_L, error_L, duty_R, error_R);
