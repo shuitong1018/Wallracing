@@ -1,0 +1,145 @@
+C251 COMPILER V5.60.0,  sensor                                                             10/04/26  21:17:17  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE sensor
+OBJECT MODULE PLACED IN .\out_file\sensor.obj
+COMPILER INVOKED BY: D:\app_for_shuitong\keil\C251\BIN\C251.EXE sensor.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) 
+                    -BROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_drive
+                    -r;..\user;..\code) DEBUG PRINT(.\out_file\sensor.lst) TABS(2) OBJECT(.\out_file\sensor.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_headfile.h" 
+    2          #include "sensor.h"
+    3          
+    4          // ================= 1. 归一化参数配置区 =================
+    5          // 步骤 A：填入你在 0-100 量程下测出的老数据（请务必替换为你实际测量的真实数值）
+    6          #define L1_OLD_MAX  50
+    7          #define L1_OLD_MIN  9.2
+    8          #define L2_OLD_MAX  50
+    9          #define L2_OLD_MIN  15.4
+   10          #define L3_OLD_MAX  50
+   11          #define L3_OLD_MIN  7.6
+   12          #define L4_OLD_MAX  50
+   13          #define L4_OLD_MIN  5.3
+   14          
+   15          
+   16          // 步骤 B：编译器自动换算，还原为 0-255 硬件底层量程的近似值 (乘255除100)
+   17          #define L1_RAW_MAX  (L1_OLD_MAX * 255 / 100)
+   18          #define L1_RAW_MIN  (L1_OLD_MIN * 255 / 100)
+   19          #define L2_RAW_MAX  (L2_OLD_MAX * 255 / 100)
+   20          #define L2_RAW_MIN  (L2_OLD_MIN * 255 / 100)
+   21          #define L3_RAW_MAX  (L3_OLD_MAX * 255 / 100)
+   22          #define L3_RAW_MIN  (L3_OLD_MIN * 255 / 100)
+   23          #define L4_RAW_MAX  (L4_OLD_MAX * 255 / 100)
+   24          #define L4_RAW_MIN  (L4_OLD_MIN * 255 / 100)
+   25          
+   26          // 步骤 C：严格套用官方算法，最大值扩大1.05倍(5%)，最小值除以2，留出充足的动态容错裕量
+   27          #define L1_MAX  (int16)(L1_RAW_MAX * 1.05f)
+   28          #define L1_MIN  (int16)(L1_RAW_MIN / 2)
+   29          #define L2_MAX  (int16)(L2_RAW_MAX * 1.05f)
+   30          #define L2_MIN  (int16)(L2_RAW_MIN / 2)
+   31          #define L3_MAX  (int16)(L3_RAW_MAX * 1.05f)
+   32          #define L3_MIN  (int16)(L3_RAW_MIN / 2)
+   33          #define L4_MAX  (int16)(L4_RAW_MAX * 1.05f)
+   34          #define L4_MIN  (int16)(L4_RAW_MIN / 2)
+   35          
+   36          
+   37          // 全局变量声明（供外部文件调用计算误差）
+   38          float L1_norm, L2_norm, L3_norm, L4_norm;
+   39          
+   40          // ================= 1.5 硬件引脚与初始化配置 =================
+   41          #define CHANNEL_NUMBER          (4)
+   42          // 电感传感器引脚配置 (请确认是否与你的实际接线一致)
+   43          #define ADC_CHANNEL1            (ADC_CH8_P00)  // L1接 P00 引脚
+   44          #define ADC_CHANNEL2            (ADC_CH9_P01)  // L2接 P01 引脚
+   45          #define ADC_CHANNEL3            (ADC_CH13_P05) // L3接 P05 引脚
+   46          #define ADC_CHANNEL4            (ADC_CH14_P06) // L4接 P06 引脚
+   47          
+   48          // 定义通道数组供读取函数使用
+   49          adc_channel_enum channel_list[CHANNEL_NUMBER] =
+   50          {
+   51              ADC_CHANNEL1, ADC_CHANNEL2, ADC_CHANNEL3, ADC_CHANNEL4
+   52          };
+   53          
+   54          // 传感器硬件初始化函数
+   55          void Sensor_Init(void)
+   56          {
+   57   1          // 将这四个引脚初始化为 8位 ADC 模式
+C251 COMPILER V5.60.0,  sensor                                                             10/04/26  21:17:17  PAGE 2   
+
+   58   1          adc_init(ADC_CHANNEL1, ADC_8BIT);
+   59   1          adc_init(ADC_CHANNEL2, ADC_8BIT);
+   60   1          adc_init(ADC_CHANNEL3, ADC_8BIT);
+   61   1          adc_init(ADC_CHANNEL4, ADC_8BIT);
+   62   1      }
+   63          
+   64          // 传感器监控打印函数 (供 main.c 循环调用)
+   65          void Sensor_Monitor(void)
+   66          {
+   67   1          // 直接打印刚刚归一化好的 0~128 的数据
+   68   1          printf("Norm -> L1:%.1f, L2:%.1f, L3:%.1f, L4:%.1f\r\n", L1_norm, L2_norm, L3_norm, L4_norm);
+   69   1      }
+   70          
+   71          // ================= 2. 核心归一化算法 =================
+   72          // 严格遵守官方公式：将ADC值映射到 0-128 范围的高效整型运算
+   73          int16 Normalize_ADC(int16 value, int16 Max, int16 Min)
+   74          {
+   75   1          int16 buf;
+   76   1          
+   77   1          // 容错：如果宏定义填反了大小值，自动交换
+   78   1          if (Min > Max) {
+   79   2              buf = Min;
+   80   2              Min = Max;
+   81   2              Max = buf;
+   82   2          }
+   83   1          
+   84   1          // 限幅保护：防止跑出边界导致负数或者超过128（这是防止车子一碰线就满偏锁死的关键）
+   85   1          if (value <= Min) return 0;
+   86   1          if (value >= Max) return 128;
+   87   1          
+   88   1          // 核心公式：利用左移7位 (<< 7) 代替乘以128，极大提升单片机运算速度，避免浮点灾难
+   89   1          return ((value - Min) << 7) / (Max - Min);
+   90   1      }
+   91          
+   92          // ================= 3. 数据读取与执行 =================
+   93          void Sensor_Read_Normalized(void)
+   94          {
+   95   1          // 1. 获取 10 次平均滤波后的底层 8 位原始值 (在 0-255 范围内变化)
+   96   1          uint16 raw1 = adc_mean_filter_convert(channel_list[0], 10);
+   97   1          uint16 raw2 = adc_mean_filter_convert(channel_list[1], 10);
+   98   1          uint16 raw3 = adc_mean_filter_convert(channel_list[2], 10);
+   99   1          uint16 raw4 = adc_mean_filter_convert(channel_list[3], 10);
+  100   1      
+  101   1          // 2. 传入各自专属的 Max 和 Min 进行归一化，得到 0~128 的整数，再存入 float 变量供差比和使用
+  102   1          L1_norm = (float)Normalize_ADC((int16)raw1, L1_MAX, L1_MIN);
+  103   1          L2_norm = (float)Normalize_ADC((int16)raw2, L2_MAX, L2_MIN);
+  104   1          L3_norm = (float)Normalize_ADC((int16)raw3, L3_MAX, L3_MIN);
+  105   1          L4_norm = (float)Normalize_ADC((int16)raw4, L4_MAX, L4_MIN);
+  106   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =       493     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =        40     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+C251 COMPILER V5.60.0,  sensor                                                             10/04/26  21:17:17  PAGE 3   
+
+  const size           =    ------     ------
+  hconst size          =        58     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

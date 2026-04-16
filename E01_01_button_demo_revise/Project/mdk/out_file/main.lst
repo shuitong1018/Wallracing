@@ -1,0 +1,371 @@
+C251 COMPILER V5.60.0,  main                                                               10/04/26  22:20:20  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE main
+OBJECT MODULE PLACED IN .\out_file\main.obj
+COMPILER INVOKED BY: D:\app_for_shuitong\keil\C251\BIN\C251.EXE ..\user\main.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,
+                    -SIZE) BROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf
+                    -_driver;..\user;..\code) DEBUG PRINT(.\out_file\main.lst) TABS(2) OBJECT(.\out_file\main.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_headfile.h" 
+    2          #include "config.h"
+    3          #include "sensor.h"
+    4          #include "path.h"
+    5          #include "error.h"
+    6          
+    7          #define MAX_DUTY           (30)                                                // ×î´óÕ¼¿Õ±È°Ù·Ö±È£¬·¶Î§Î
+             -ª 0%~30%
+    8          
+    9          #define LED1               (IO_P52)
+   10          
+   11          #define PWM_R              (PWMA_CH4P_P26)                                     // ÓÒµç»ú PWM ¿ØÖÆÒý½Å¶¨Òå
+   12          #define DIR_R              (IO_P51)                                            // ÓÒµç»ú·½Ïò¿ØÖÆÒý½Å¶¨Òå
+   13          
+   14          #define PWM_L              (PWMA_CH3P_P24)                                     // ×óµç»ú PWM ¿ØÖÆÒý½Å¶¨Òå
+   15          #define DIR_L              (IO_P50)                                            // ×óµç»ú·½Ïò¿ØÖÆÒý½Å¶¨Òå
+   16          
+   17          #define ENCODER_R          (TIM3_ENCOEDER)                                     // ÓÒµç»ú±àÂëÆ÷¶¨Ê±Æ÷¶¨Òå
+   18          #define ENCODER_DIR_R      (IO_P53)                                            // ÓÒµç»ú±àÂëÆ÷·½ÏòÒý½Å¶¨Ò
+             -å
+   19          #define ENCODER_COUNT_R    (TIM3_ENCOEDER_P04)                                 // ÓÒµç»ú±àÂëÆ÷¼ÆÊýÒý½Å¶¨Ò
+             -å
+   20          
+   21          #define ENCODER_L          (TIM0_ENCOEDER)                                     // ×óµç»ú±àÂëÆ÷¶¨Ê±Æ÷¶¨Òå
+   22          #define ENCODER_DIR_L      (IO_P35)                                            // ×óµç»ú±àÂëÆ÷·½ÏòÒý½Å¶¨Ò
+             -å
+   23          #define ENCODER_COUNT_L    (TIM0_ENCOEDER_P34)                                 // ×óµç»ú±àÂëÆ÷¼ÆÊýÒý½Å¶¨Ò
+             -å
+   24          #define DEADZONE_L  1450  // ×óÂÖËÀÇø²¹³¥ 15%
+   25          #define DEADZONE_R  1350  // ÓÒÂÖËÀÇø²¹³¥ 13% (ÓÒÂÖ½ÏÁéÃô£¬¸øÉÙµã)
+   26          
+   27          // È«¾Ö±äÁ¿
+   28          float error_value = 0.0f;
+   29          extern float L1_norm, L2_norm, L3_norm, L4_norm;  
+   30          
+   31          float duty_L = 0,duty_R = 0;                                                     // ËÙ¶È»·Êä³öµÄÕ¼¿Õ±È
+   32          
+   33          int16 right_encoder_data = 0;                                                  // ÓÒµç»ú±àÂëÆ÷¼ÆÊýÊý¾Ý
+   34          int16 left_encoder_data = 0;                                                   // ×óµç»ú±àÂëÆ÷¼ÆÊýÊý¾Ý
+   35          
+   36          float Kp_L = 0.015, Kd_L = 2.2;                                                     // ×óµç»ú PID ¿ØÖÆ²ÎÊ
+             -ý
+   37          float Kp_R = 0.04, Kd_R = 1.9;                                                     // ÓÒµç»ú PID ¿ØÖÆ²ÎÊý
+   38          
+   39          float error_L=0,error_R=0;
+   40          /* ÉÏÒ»ÖÜÆÚµÄ£¨²âÁ¿-Ä¿±ê£©Îó²î£¬ÓÃÓÚ¼ÆËãÎ¢·ÖÏî£¨delta error£© */
+   41          float prev_e_L = 0.0f, prev_e_R = 0.0f;
+   42          
+   43          float target_speed = 0.5;                                                     // Ä¿±êËÙ¶È±äÁ¿£¬µ¥Î»Îªm/s
+   44          float target_speed_L = 0,target_speed_R = 0;                                // ×óÓÒÂÖÄ¿±êËÙ¶È±äÁ¿£¬µ¥Î»Îª
+             -m/s   
+   45          
+   46          // ·½ÏòPID²ÎÊý
+   47          float Kp1_dir = 0.03f;
+   48          float Kp2_dir = 0.005f;
+   49          float Kd_dir = 0.0f;
+   50          float prev_e_dir = 0.0f;
+C251 COMPILER V5.60.0,  main                                                               10/04/26  22:20:20  PAGE 2   
+
+   51          float dir_output = 0.0f;           
+   52          
+   53          //-------------------------------------------------------------------------------------------------------
+             -------------
+   54          // ÏµÍ³³õÊ¼»¯
+   55          //-------------------------------------------------------------------------------------------------------
+             -------------
+   56          void System_Init(void)
+   57          {
+   58   1          // Öð·É¿â±ØÐëµÄ³õÊ¼»¯
+   59   1          clock_init(SYSTEM_CLOCK_30M);      // ÏµÍ³Ê±ÖÓ³õÊ¼»¯Îª30MHz
+   60   1          debug_init();                       // µ÷ÊÔ´®¿Ú³õÊ¼»¯ - Õ¼ÓÃ P31(TX) ºÍ P30(RX)UARTÒý½Å
+   61   1          
+   62   1          // ´«¸ÐÆ÷Ä£¿é³õÊ¼»¯
+   63   1          Sensor_Init();
+   64   1          
+   65   1          //µç»úÄ£¿é³õÊ¼»¯
+   66   1          gpio_init(LED1, GPO, 1, GPO_PUSH_PULL);
+   67   1        
+   68   1        pwm_init(PWM_R, 1000, 0);                             // ³õÊ¼»¯ÓÒµç»ú PWM Òý½Å£¬ÆµÂÊÎª 1000 Hz£¬³õÊ¼Õ¼¿Õ±ÈÎª 0
+   69   1        gpio_init(DIR_R, GPO, 1, GPO_PUSH_PULL);                    // ³õÊ¼»¯ÓÒµç»ú·½Ïò¿ØÖÆÒý½ÅÎªÍÆÍìÊä³ö£¬³õÊ¼µçÆ½Îª 1
+   70   1              
+   71   1        pwm_init(PWM_L, 1000, 0);                             // ³õÊ¼»¯×óµç»ú PWM Òý½Å£¬ÆµÂÊÎª 1000 Hz£¬³õÊ¼Õ¼¿Õ±ÈÎª 0
+   72   1        gpio_init(DIR_L, GPO, 1, GPO_PUSH_PULL);                    // ³õÊ¼»¯×óµç»ú·½Ïò¿ØÖÆÒý½ÅÎªÍÆÍìÊä³ö£¬³õÊ¼µçÆ½Îª 1
+   73   1              
+   74   1        encoder_dir_init(ENCODER_R, ENCODER_DIR_R, ENCODER_COUNT_R);          // ³õÊ¼»¯ÓÒµç»ú±àÂëÆ÷£¬Ö¸¶¨·½ÏòÒý½ÅºÍ¼
+             -ÆÊýÒý½Å
+   75   1        encoder_dir_init(ENCODER_L, ENCODER_DIR_L, ENCODER_COUNT_L);          // ³õÊ¼»¯×óµç»ú±àÂëÆ÷£¬Ö¸¶¨·½ÏòÒý½ÅºÍ¼
+             -ÆÊýÒý½Å
+   76   1              
+   77   1        pwm_set_freq(PWM_R, 500, 5000);                       // ÉèÖÃÓÒµç»ú PWM ÆµÂÊÎª 500 Hz£¬Õ¼¿Õ±ÈÎª 50%£¨5000 ¶ÔÓ¦ 50%
+             -£©£¬ÓÃÓÚÇý¶¯Ð£×¼Áãµã
+   78   1        pwm_set_freq(PWM_L, 500, 5000);                       // ÉèÖÃ×óµç»ú PWM ÆµÂÊÎª 500 Hz£¬Õ¼¿Õ±ÈÎª 50%£¨5000 ¶ÔÓ¦ 50%
+             -£©£¬ÓÃÓÚÇý¶¯Ð£×¼Áãµã
+   79   1              
+   80   1        system_delay_ms(3000);                            // ÑÓ³Ù 3000 ms£¬µÈ´ýÇý¶¯°åÍê³ÉÁãµãÐ£×¼
+   81   1              
+   82   1        pwm_set_freq(PWM_R, 1000, 0);                         // »Ö¸´ÓÒµç»ú PWM ÆµÂÊÎª 1000 Hz£¬Õ¼¿Õ±ÈÎª 0£¬×¼±¸½øÈëÕý³£¿ØÖ
+             -Æ
+   83   1        pwm_set_freq(PWM_L, 1000, 0);                         // »Ö¸´×óµç»ú PWM ÆµÂÊÎª 1000 Hz£¬Õ¼¿Õ±ÈÎª 0£¬×¼±¸½øÈëÕý³£¿ØÖ
+             -Æ
+   84   1        
+   85   1        // ´Ë´¦±àÐ´ÓÃ»§´úÂë ÀýÈçÍâÉè³õÊ¼»¯´úÂëµÈ
+   86   1        pit_ms_init(TIM1_PIT, 5);                         // ³õÊ¼»¯ PIT ¶¨Ê±Æ÷,¶¨Ê±ÖÜÆÚÎª 5 ms
+   87   1        // ³õÊ¼»¯ÎÞÏß´®¿Ú
+   88   1          if(wireless_uart_init())
+   89   1          {
+   90   2              // ³õÊ¼»¯Ê§°ÜÊ±¿ÉÒÔÔÚ´Ë´¦Àí£¨µ±Ç°½ö¼òµ¥¶Ï¿ªÑ­»·£©
+   91   2              while(1);
+   92   2          }
+   93   1          
+   94   1          
+   95   1          system_delay_ms(100);                
+   96   1      }
+   97          
+   98          //ËÙ¶È»·Ïà¹Øº¯ÊýÉùÃ÷
+   99          void speed_control();
+  100          void speed_get();
+  101          void speed_calculate();
+  102          void speed_out();
+  103          
+  104          //µ÷ÊÔº¯ÊýÉùÃ÷
+  105          void data_show();
+  106          
+  107          //×ªÏò»·Ïà¹Øº¯ÊýÉùÃ÷
+  108          void dir_get();
+C251 COMPILER V5.60.0,  main                                                               10/04/26  22:20:20  PAGE 3   
+
+  109          void dir_calculate();
+  110          void dir_control();
+  111          
+  112          //Ñ²Ïßº¯Êý
+  113          void patrol_line();
+  114          
+  115          //-------------------------------------------------------------------------------------------------------
+             -------------
+  116          // Ö÷º¯Êý
+  117          //-------------------------------------------------------------------------------------------------------
+             -------------
+  118          void main(void)
+  119          {
+  120   1          
+  121   1          System_Init();
+  122   1        
+  123   1          tim1_irq_handler = patrol_line;
+  124   1          while(1)
+  125   1          {
+  126   2          // ¶ÁÈ¡´«¸ÐÆ÷
+  127   2          //Sensor_Read_Normalized();
+  128   2        //  Sensor_Monitor();
+  129   2        
+  130   2          //     // ¼ÆËãÎó²î
+  131   2           //error_value = Error_Calculate(L1_norm, L2_norm, L3_norm, L4_norm);
+  132   2          //printf("the error is %.2f\r\n",error_value);
+  133   2          data_show();
+  134   2          system_delay_ms(80);  
+  135   2        }
+  136   1      }
+  137                  
+  138                  // Ö´ÐÐ¿ØÖÆ
+  139                  /*switch(action)
+  140                  {
+  141                      case ACTION_TRACKING:
+  142                          // Õý³£Ñ­¼£
+  143                          left_speed = BASE_SPEED_NORMAL + error_value;
+  144                          right_speed = BASE_SPEED_NORMAL - error_value;
+  145                          Motor_Control(left_speed, right_speed);
+  146                          break;
+  147                          
+  148                      case ACTION_TRACKING_FAST:
+  149                          // ¿ìËÙÑ­¼££¨ÈçÕÛÏß£©
+  150                          left_speed = BASE_SPEED_FAST + error_value * 2;
+  151                          right_speed = BASE_SPEED_FAST - error_value * 2;
+  152                          Motor_Control(left_speed, right_speed);
+  153                          break;
+  154                          
+  155                      case ACTION_TURN_LEFT_HARD:
+  156                          // ¼±×ó×ª£¨Ö±½Ç£©
+  157                          Motor_SetLeft(300);    // 30%Õ¼¿Õ±È
+  158                          Motor_SetRight(700);   // 70%Õ¼¿Õ±È
+  159                          break;
+  160                          
+  161                      case ACTION_TURN_RIGHT_HARD:
+  162                          // ¼±ÓÒ×ª£¨Ö±½Ç£©
+  163                          Motor_SetLeft(700);
+  164                          Motor_SetRight(300);
+  165                          break;
+  166                          
+  167                      case ACTION_TURN_LEFT_SMOOTH:
+  168                          // Æ½»¬×ó×ª£¨Ô²ÐÎÍä£©
+  169                          Motor_SetLeft(400);
+  170                          Motor_SetRight(600);
+  171                          break;
+  172                          
+C251 COMPILER V5.60.0,  main                                                               10/04/26  22:20:20  PAGE 4   
+
+  173                      case ACTION_TURN_RIGHT_SMOOTH:
+  174                          // Æ½»¬ÓÒ×ª£¨Ô²ÐÎÍä£©
+  175                          Motor_SetLeft(600);
+  176                          Motor_SetRight(400);
+  177                          break;
+  178                          
+  179                      case ACTION_ROUNDABOUT:
+  180                          // »·µºÄ£Ê½
+  181                          Motor_SetLeft(450);
+  182                          Motor_SetRight(550);
+  183                          break;
+  184                          
+  185                      default:
+  186                          Motor_Stop();
+  187                          break;
+  188                  }*/
+  189                  
+  190          void dir_get(){
+  191   1          // ¶ÁÈ¡´«¸ÐÆ÷
+  192   1          Sensor_Read_Normalized();
+  193   1          //Sensor_Monitor();
+  194   1        
+  195   1          // ¼ÆËãÎó²î
+  196   1          error_value = Error_Calculate(L1_norm, L2_norm, L3_norm, L4_norm);
+  197   1      }
+  198          
+  199          void dir_calculate(){
+  200   1          float e = error_value;
+  201   1          float abs_e = (e>=0) ? e : -e;
+  202   1      
+  203   1          dir_output = Kp1_dir * e + Kp2_dir * e * abs_e + Kd_dir * (e - prev_e_dir);
+  204   1          
+  205   1          // ÏÞ·ù¿ØÖÆÁ¿
+  206   1          if (dir_output > 0.6f) dir_output = 0.6f;
+  207   1          if (dir_output < -0.6f) dir_output = -0.6f;
+  208   1          
+  209   1          prev_e_dir = e;
+  210   1      }
+  211          
+  212          void dir_control(){
+  213   1          dir_get();
+  214   1          dir_calculate();
+  215   1      }
+  216          
+  217          void patrol_line(){
+  218   1          dir_control();
+  219   1          target_speed_L = target_speed - dir_output; // ½«·½Ïò¿ØÖÆÊä³öµþ¼Óµ½×óÂÖÕ¼¿Õ±È
+  220   1          target_speed_R = target_speed + dir_output; // ½«·½Ïò¿ØÖÆÊä³öµþ¼Óµ½ÓÒÂÖÕ¼¿Õ±È
+  221   1          if(target_speed_L < 0.02) target_speed_L = 0.02;
+  222   1          if(target_speed_R < 0.02) target_speed_R = 0.02;
+  223   1          speed_control();
+  224   1          
+  225   1      }
+  226            
+  227          void speed_control(){
+  228   1           speed_get();
+  229   1           speed_calculate();
+  230   1           speed_out();
+  231   1      }
+  232          
+  233          void speed_get(){
+  234   1          right_encoder_data = encoder_get_count(ENCODER_R);    // »ñÈ¡ÓÒµç»ú±àÂëÆ÷¼ÆÊýÊý¾Ý
+  235   1          left_encoder_data  = -encoder_get_count(ENCODER_L);    // »ñÈ¡×óµç»ú±àÂëÆ÷¼ÆÊýÊý¾Ý
+  236   1      
+  237   1          encoder_clear_count(ENCODER_R);    // ÇåÁãÓÒµç»ú±àÂëÆ÷¼ÆÊý
+  238   1          encoder_clear_count(ENCODER_L);    // ÇåÁã×óµç»ú±àÂëÆ÷¼ÆÊý
+C251 COMPILER V5.60.0,  main                                                               10/04/26  22:20:20  PAGE 5   
+
+  239   1      }
+  240          
+  241          void speed_calculate(){
+  242   1        
+  243   1                  float eL = (float)(target_speed_L - left_encoder_data*0.003518);   // µ±Ç°Îó²î£¨×ó£©
+  244   1                  float eR = (float)(target_speed_R - right_encoder_data*0.003518);  // µ±Ç°Îó²î£¨ÓÒ£©
+  245   1      
+  246   1                  // ×óÂÖ£º±ÈÀý + Î¢·Ö
+  247   1                  error_L = Kp_L * (eL) + Kd_L * (eL - prev_e_L) ;
+  248   1                  // ÏÞ·ù¿ØÖÆÁ¿£¬±£³ÖÓëÔ­Âß¼­Ò»ÖÂµÄÏÞ·ù ¡À5
+  249   1                  if (error_L > 5.0f) error_L = 5.0f;
+  250   1                  if (error_L < -5.0f) error_L = -5.0f;
+  251   1                  duty_L += error_L;
+  252   1                  if (duty_L >= MAX_DUTY) duty_L = MAX_DUTY;
+  253   1                  if (duty_L <= -MAX_DUTY) duty_L = -MAX_DUTY;
+  254   1      
+  255   1                  // ÓÒÂÖ£º±ÈÀý + Î¢·Ö
+  256   1                  error_R = Kp_R * (eR) + Kd_R * (eR - prev_e_R);
+  257   1                  if (error_R > 5.0f) error_R = 5.0f;
+  258   1                  if (error_R < -5.0f) error_R = -5.0f;
+  259   1                  duty_R += error_R;
+  260   1                  if (duty_R >= MAX_DUTY) duty_R = MAX_DUTY;
+  261   1                  if (duty_R <= -MAX_DUTY) duty_R = -MAX_DUTY;
+  262   1      
+  263   1                  // ±£´æ±¾ÖÜÆÚÎó²îÒÔ±ãÏÂ´Î¼ÆËãÎ¢·ÖÏî
+  264   1                  prev_e_L = eL;
+  265   1                  prev_e_R = eR;
+  266   1      }
+  267          
+  268          void speed_out(){
+  269   1          if(duty_L >= 0)                                                               // µ±Õ¼¿Õ±ÈÎª·Ç¸ºÊýÊ±£¬µç
+             -»úÕý×ª
+  270   1          {
+  271   2              pwm_set_duty(PWM_L, (int32)(duty_L * (PWM_DUTY_MAX / 100)) + DEADZONE_L);     // ¼ÆËã²¢Êä³öÕ¼¿Õ±È
+             -£¨¼ÓÉÏ ÐÅºÅËÀÇø£©
+  272   2              gpio_set_level(DIR_L, 1);                                               // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  273   2          }
+  274   1          else                                                                        // µç»ú·´×ª
+  275   1          {
+  276   2              pwm_set_duty(PWM_L, (int32)((-duty_L) * (PWM_DUTY_MAX / 100)) + DEADZONE_L);  // ¼ÆËã²¢Êä³öÕ¼¿Õ±È
+             -£¨¼ÓÉÏ ÐÅºÅËÀÇø£©
+  277   2              gpio_set_level(DIR_L, 0);                                               // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  278   2                                                            // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  279   2          }
+  280   1          if(duty_R >= 0)                                                               // µ±Õ¼¿Õ±ÈÎª·Ç¸ºÊýÊ±£¬µç
+             -»úÕý×ª
+  281   1          {
+  282   2              pwm_set_duty(PWM_R, (int32)(duty_R * (PWM_DUTY_MAX / 100)) + DEADZONE_R);     // ¼ÆËã²¢Êä³öÕ¼¿Õ±È
+             -£¨¼ÓÉÏ ÐÅºÅËÀÇø£©
+  283   2              gpio_set_level(DIR_R, 0);                                               // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  284   2          }
+  285   1          else                                                                        // µç»ú·´×ª
+  286   1          {
+  287   2              pwm_set_duty(PWM_R, (int32)((-duty_R) * (PWM_DUTY_MAX / 100)) + DEADZONE_R);  // ¼ÆËã²¢Êä³öÕ¼¿Õ±È
+             -£¨¼ÓÉÏ ÐÅºÅËÀÇø£©
+  288   2              gpio_set_level(DIR_R, 1);                                               // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  289   2          }
+  290   1      }
+  291          void data_show(){
+  292   1          char buf[128];
+  293   1      
+  294   1          // ¸ñÊ½»¯²¢Í¨¹ýÎÞÏß´®¿Ú·¢ËÍ
+  295   1          sprintf(buf, "%.2f,%.2f,%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.003518,
+             -target_speed_R,target_speed_L,dir_output);
+  296   1          wireless_uart_send_string(buf);
+  297   1      
+C251 COMPILER V5.60.0,  main                                                               10/04/26  22:20:20  PAGE 6   
+
+  298   1         // sprintf(buf, "duty_L:%d error_L:%.2f duty_R:%d error_R:%.2f\r\n", duty_L, error_L, duty_R, error_R)
+             -;
+  299   1         // wireless_uart_send_string(buf);
+  300   1      
+  301   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =      1997     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =       224     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =       214     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

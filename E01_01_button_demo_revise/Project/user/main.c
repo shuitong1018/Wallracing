@@ -21,7 +21,7 @@
 #define ENCODER_L          (TIM0_ENCOEDER)                                     // 左电机编码器定时器定义
 #define ENCODER_DIR_L      (IO_P35)                                            // 左电机编码器方向引脚定义
 #define ENCODER_COUNT_L    (TIM0_ENCOEDER_P34)                                 // 左电机编码器计数引脚定义
-#define DEADZONE_L  1500  // 左轮死区补偿 15%
+#define DEADZONE_L  1450  // 左轮死区补偿 15%
 #define DEADZONE_R  1350  // 右轮死区补偿 13% (右轮较灵敏，给少点)
 
 // 全局变量
@@ -44,8 +44,9 @@ float target_speed = 0.5;                                                     //
 float target_speed_L = 0,target_speed_R = 0;                                // 左右轮目标速度变量，单位为m/s   
 
 // 方向PID参数
-float Kp_dir = 0.006f;
-float Kd_dir = 0.025f;
+float Kp1_dir = 0.03f;
+float Kp2_dir = 0.005f;
+float Kd_dir = 0.0f;
 float prev_e_dir = 0.0f;
 float dir_output = 0.0f;           
 
@@ -197,13 +198,13 @@ void dir_get(){
 
 void dir_calculate(){
     float e = error_value;
+	  float abs_e = (e>=0) ? e : -e;
 
-    // 非线性Kp
-    dir_output = Kp_dir * e + Kd_dir * (e - prev_e_dir);
+    dir_output = Kp1_dir * e + Kp2_dir * e * abs_e + Kd_dir * (e - prev_e_dir);
     
     // 限幅控制量
-    if (dir_output > 1.0f) dir_output = 1.0f;
-    if (dir_output < -1.0f) dir_output = -1.0f;
+    if (dir_output > 0.6f) dir_output = 0.6f;
+    if (dir_output < -0.6f) dir_output = -0.6f;
     
     prev_e_dir = e;
 }
@@ -217,6 +218,8 @@ void patrol_line(){
     dir_control();
     target_speed_L = target_speed - dir_output; // 将方向控制输出叠加到左轮占空比
     target_speed_R = target_speed + dir_output; // 将方向控制输出叠加到右轮占空比
+		if(target_speed_L < 0.02) target_speed_L = 0.02;
+		if(target_speed_R < 0.02) target_speed_R = 0.02;
     speed_control();
     
 }
@@ -242,17 +245,17 @@ void speed_calculate(){
 
             // 左轮：比例 + 微分
             error_L = Kp_L * (eL) + Kd_L * (eL - prev_e_L) ;
-            // 限幅控制量，保持与原逻辑一致的限幅 ±3
-            if (error_L > 3.0f) error_L = 3.0f;
-            if (error_L < -3.0f) error_L = -3.0f;
+            // 限幅控制量，保持与原逻辑一致的限幅 ±5
+            if (error_L > 5.0f) error_L = 5.0f;
+            if (error_L < -5.0f) error_L = -5.0f;
             duty_L += error_L;
 						if (duty_L >= MAX_DUTY) duty_L = MAX_DUTY;
             if (duty_L <= -MAX_DUTY) duty_L = -MAX_DUTY;
 
             // 右轮：比例 + 微分
             error_R = Kp_R * (eR) + Kd_R * (eR - prev_e_R);
-            if (error_R > 3.0f) error_R = 3.0f;
-            if (error_R < -3.0f) error_R = -3.0f;
+            if (error_R > 5.0f) error_R = 5.0f;
+            if (error_R < -5.0f) error_R = -5.0f;
             duty_R += error_R;
             if (duty_R >= MAX_DUTY) duty_R = MAX_DUTY;
             if (duty_R <= -MAX_DUTY) duty_R = -MAX_DUTY;
