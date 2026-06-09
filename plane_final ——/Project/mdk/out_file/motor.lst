@@ -1,0 +1,129 @@
+C251 COMPILER V5.60.0,  motor                                                              09/06/26  21:58:49  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE motor
+OBJECT MODULE PLACED IN .\out_file\motor.obj
+COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE motor.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCDIR(..\.
+                    -.\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;..\code)
+                    - DEBUG PRINT(.\out_file\motor.lst) OBJECT(.\out_file\motor.obj) 
+
+stmt  level    source
+
+    1          /*#include "motor.h"
+    2          #include "zf_driver_gpio.h"
+    3          #include "zf_driver_pwm.h"
+    4          
+    5          void Motor_Init(void)
+    6          {
+    7              // 方向引脚初始化 - gpio_init需要4个参数
+    8              gpio_init(IO_P21, GPO, 1, GPO_PUSH_PULL);   // 左电机方向，初始高电平，推挽输出
+    9              gpio_init(IO_P23, GPO, 1, GPO_PUSH_PULL);   // 右电机方向，初始高电平，推挽输出
+   10              
+   11              // PWM初始化 - 使用正确的PWM通道枚举
+   12              // 左电机使用PWMA_CH1P_P20 (P20输出PWM)
+   13              pwm_init(PWMA_CH1P_P20, 20000, 0);  // 20kHz，初始占空比0
+   14              
+   15              // 右电机使用PWMA_CH2P_P22 (P22输出PWM)
+   16              pwm_init(PWMA_CH2P_P22, 20000, 0);  // 20kHz，初始占空比0
+   17                          encoder_dir_init(ENCODER_R, ENCODER_DIR_R, ENCODER_COUNT_R);                            // 初始化右电机编码器，指定方向引脚和
+             -计数引脚
+   18                          encoder_dir_init(ENCODER_L, ENCODER_DIR_L, ENCODER_COUNT_L);                            // 初始化左电机编码器，指定方向引脚和
+             -计数引脚
+   19                                          
+   20                          pwm_set_freq(PWM_R, 500, 5000);                                                                                         // 设置右电机 PWM 频率为 500 Hz，占空比为 50%（5000 对应 50
+             -%），用于驱动校准零点
+   21                          pwm_set_freq(PWM_L, 500, 5000);                                                                                         // 设置左电机 PWM 频率为 500 Hz，占空比为 50%（5000 对应 50
+             -%），用于驱动校准零点
+   22                                          
+   23                          system_delay_ms(3000);                                                                                                          // 延迟 3000 ms，等待驱动板完成零点校准
+   24                                          
+   25                          pwm_set_freq(PWM_R, 1000, 0);                                                                                           // 恢复右电机 PWM 频率为 1000 Hz，占空比为 0，准备进入正常控
+             -制
+   26                          pwm_set_freq(PWM_L, 1000, 0);                                                                                           // 恢复左电机 PWM 频率为 1000 Hz，占空比为 0，准备进入正常控
+             -制
+   27                  
+   28          }
+   29          
+   30          void Motor_SetLeft(int speed)
+   31          {
+   32              uint8 dir = 1;
+   33              uint32 pwm_value;
+   34              
+   35              // 速度限幅 (PWM范围0-10000，因为PWM_DUTY_MAX=10000)
+   36              if(speed > MOTOR_SPEED_MAX) speed = MOTOR_SPEED_MAX;
+   37              if(speed < -MOTOR_SPEED_MAX) speed = -MOTOR_SPEED_MAX;
+   38              
+   39              // 方向处理
+   40              if(speed >= 0) {
+   41                  dir = 1;                        // 正转
+   42                  // 将0-255的速度映射到0-10000
+   43                  pwm_value = (uint32)speed * (PWM_DUTY_MAX / MOTOR_SPEED_MAX);
+   44              } else {
+   45                  dir = 0;                        // 反转
+   46                  pwm_value = (uint32)(-speed) * (PWM_DUTY_MAX / MOTOR_SPEED_MAX);
+   47              }
+   48              
+   49              gpio_set_level(IO_P21, dir);                 // 设置方向
+   50              pwm_set_duty(PWMA_CH1P_P20, pwm_value);      // 设置PWM占空比
+   51          }
+C251 COMPILER V5.60.0,  motor                                                              09/06/26  21:58:49  PAGE 2   
+
+   52          
+   53          void Motor_SetRight(int speed)
+   54          {
+   55              uint8 dir = 1;
+   56              uint32 pwm_value;
+   57              
+   58              if(speed > MOTOR_SPEED_MAX) speed = MOTOR_SPEED_MAX;
+   59              if(speed < -MOTOR_SPEED_MAX) speed = -MOTOR_SPEED_MAX;
+   60              
+   61              if(speed >= 0) {
+   62                  dir = 1;
+   63                  pwm_value = (uint32)speed * (PWM_DUTY_MAX / MOTOR_SPEED_MAX);
+   64              } else {
+   65                  dir = 0;
+   66                  pwm_value = (uint32)(-speed) * (PWM_DUTY_MAX / MOTOR_SPEED_MAX);
+   67              }
+   68              
+   69              gpio_set_level(IO_P23, dir);                 // 设置方向
+   70              pwm_set_duty(PWMA_CH2P_P22, pwm_value);      // 设置PWM占空比
+   71          }
+   72          
+   73          void Motor_Control(int left_speed, int right_speed)
+   74          {
+   75              Motor_SetLeft(left_speed);
+   76              Motor_SetRight(right_speed);
+   77          }
+   78          
+   79          void Motor_Stop(void)
+   80          {
+   81              pwm_set_duty(PWMA_CH1P_P20, 0);
+   82              pwm_set_duty(PWMA_CH2P_P22, 0);
+   83              gpio_set_level(IO_P21, 1);
+   84              gpio_set_level(IO_P23, 1);
+   85          }*/
+*** WARNING C38 IN LINE 85 OF motor.c: empty translation unit
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =    ------     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =    ------     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =    ------     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

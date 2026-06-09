@@ -1,0 +1,628 @@
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE main
+OBJECT MODULE PLACED IN .\out_file\main.obj
+COMPILER INVOKED BY: D:\keil\C251\BIN\C251.EXE ..\user\main.c LARGE NOALIAS WARNINGLEVEL(3) OPTIMIZE(0,SIZE) BROWSE INCD
+                    -IR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;..\user;.
+                    -.\code) DEBUG PRINT(.\out_file\main.lst) OBJECT(.\out_file\main.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_headfile.h" 
+    2          #include "config.h"
+    3          #include "sensor.h"
+    4          #include "path.h"
+    5          #include "error.h"
+    6          
+    7          #define MAX_DUTY           (75)                                                // ×î´óÕ¼¿Õ±È°Ù·Ö±È£¬·¶Î§Î
+             -ª 0%~75%
+    8          
+    9          #define LED1               (IO_P52)
+   10          
+   11          // ¡¾ÐÂÔö 1¡¿£º°´¼üÒý½ÅÓëÆÁÄ»Ä£Ê½±äÁ¿
+   12          #define KEY_PIN            (IO_P70)
+   13          uint8 display_mode = 0; // 0´ú±íÏÔÊ¾Norm¹éÒ»»¯Öµ£¬1´ú±íÏÔÊ¾RawÔ­Ê¼Öµ
+   14          
+   15          // ¶¨Òå·¢³µ°´¼üºÍ×´Ì¬±äÁ¿ 
+   16          #define RUN_KEY_PIN        (IO_P71)      // ·¢³µ/Í£³µ°´¼ü
+   17          uint8 car_running = 0;                   // 0: Í£³µ¿´Êý¾Ý×´Ì¬, 1: ¿ñì­×´Ì¬
+   18          
+   19          #define PWM_R              (PWMA_CH4P_P26)                                     // ÓÒµç»ú PWM ¿ØÖÆÒý½Å¶¨Òå
+   20          #define DIR_R              (IO_P51)                                            // ÓÒµç»ú·½Ïò¿ØÖÆÒý½Å¶¨Òå
+   21          
+   22          #define PWM_L              (PWMA_CH3P_P24)                                     // ×óµç»ú PWM ¿ØÖÆÒý½Å¶¨Òå
+   23          #define DIR_L              (IO_P50)                                            // ×óµç»ú·½Ïò¿ØÖÆÒý½Å¶¨Òå
+   24          
+   25          #define ENCODER_R          (TIM3_ENCOEDER)                                     // ÓÒµç»ú±àÂëÆ÷¶¨Ê±Æ÷¶¨Òå
+   26          #define ENCODER_DIR_R      (IO_P53)                                            // ÓÒµç»ú±àÂëÆ÷·½ÏòÒý½Å¶¨Ò
+             -å
+   27          #define ENCODER_COUNT_R    (TIM3_ENCOEDER_P04)                                 // ÓÒµç»ú±àÂëÆ÷¼ÆÊýÒý½Å¶¨Ò
+             -å
+   28          
+   29          #define ENCODER_L          (TIM0_ENCOEDER)                                     // ×óµç»ú±àÂëÆ÷¶¨Ê±Æ÷¶¨Òå
+   30          #define ENCODER_DIR_L      (IO_P35)                                            // ×óµç»ú±àÂëÆ÷·½ÏòÒý½Å¶¨Ò
+             -å
+   31          #define ENCODER_COUNT_L    (TIM0_ENCOEDER_P34)                                 // ×óµç»ú±àÂëÆ÷¼ÆÊýÒý½Å¶¨Ò
+             -å
+   32          #define DEADZONE_L  1250  // ×óÂÖËÀÇø²¹³¥ 
+   33          #define DEADZONE_R  1300  // ÓÒÂÖËÀÇø²¹³¥ 
+   34          
+   35          #define PWM_FREQ           (500)                      // PWMÆµÂÊ 
+   36          #define PWM_PIN            (PWMB_CH3_P33)              // Ê¹ÓÃP33Òý½Å
+   37          #define MOTOR_SPEED_DUTY   (3000)                      // ¹Ì¶¨×ªËÙÕ¼¿Õ±È£¨0-10000£©
+   38          
+   39          #define DATA_SIZE 800
+   40          
+   41          //typedef struct {
+   42          //    int16 left_encoder;
+   43          //    int16 right_encoder;
+   44          //    int16 dir_output_scaled;
+   45          //} pid_data_t;
+   46          
+   47          // È«¾Ö±äÁ¿
+   48          float error_value = 0.0f;
+   49          extern float L1_norm, L2_norm, L3_norm, L4_norm;  
+   50          extern uint16 L1_raw, L2_raw, L3_raw, L4_raw;
+   51          
+   52          float angle_z;
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 2   
+
+   53          extern int8 round_direction = 0; // 1´ú±íÓÒ»·£¬-1´ú±í×ó»·
+   54          extern path_state_enum current_path_type;
+   55          extern round_state_enum round_step;
+   56          
+   57          float edata duty_L = 0,duty_R = 0;                                                     // ËÙ¶È»·Êä³öµÄÕ¼¿
+             -Õ±È
+   58          
+   59          uint16 lost_line_timer = 0;   // ÐÞ¸´£º¶¨Òå¶ªÊ§Ïß¼ÆÊ±Æ÷
+   60          float last_stable_dir = 0;    // ÐÞ¸´£º¶¨ÒåÊ®×ÖÂ·¿ÚËø¶¨µÄ·½Ïò
+   61          int16 edata right_encoder_data = 0;                                                  // ÓÒµç»ú±àÂëÆ÷¼ÆÊýÊ
+             -ý¾Ý
+   62          int16 edata left_encoder_data = 0;                                                   // ×óµç»ú±àÂëÆ÷¼ÆÊýÊ
+             -ý¾Ý
+   63          
+   64          uint16 action_timer = 0;
+   65          
+   66          const float Kp_L = 12, Kd_L = 19;                                                                       // ×óµç»ú PID ¿ØÖÆ²ÎÊý
+   67          const float Kp_R = 11.5, Kd_R = 19;                                                     // ÓÒµç»ú PID ¿ØÖ
+             -Æ²ÎÊý
+   68          const float KF_L = 10.9,KF_R =10.3;
+   69          /* ÉÏÒ»ÖÜÆÚµÄ£¨²âÁ¿-Ä¿±ê£©Îó²î£¬ÓÃÓÚ¼ÆËãÎ¢·ÖÏî£¨delta error£© */
+   70          float edata prev_e_L = 0.0f, prev_e_R = 0.0f;
+   71          
+   72          
+   73          const float target_speed = 1.7;                                                 // Ä¿±êËÙ¶È±äÁ¿£¬µ¥Î»Îªm/
+             -s
+   74          float edata target_speed_L = 0,target_speed_R = 0;                              // ×óÓÒÂÖÄ¿±êËÙ¶È±äÁ¿£¬µ¥
+             -Î»Îªm/s   
+   75          
+   76          // ·½ÏòPID²ÎÊý
+   77          const float Kp1_dir = 0.0006f;
+   78          const float Kp2_dir = 0.000052f;
+   79          const float Kd_dir = 0.01f;
+   80          float edata prev_e_dir = 0.0f;
+   81          float edata dir_output = 0.0f;           
+   82          
+   83          // ================= ÍÓÂÝÒÇÈ«¾Ö±äÁ¿ =================
+   84          float gyro_z_offset = 0.0f; // ZÖá¾²Ì¬ÁãÆ«
+   85          float gyro_x_offset = 0.0f; // ¡¾±ØÐëÐÂÔö¡¿xÖá¾²Ì¬ÁãÆ«
+   86          float angle_z = 0.0f;       // »ý·ÖµÃµ½µÄ¾ø¶Ô½Ç¶È£¨¶È£©
+   87          float true_gyro_z = 0.0f;
+   88          float true_gyro_x = 0.0f;   // ¡¾±ØÐëÐÂÔö¡¿ÕæÊµµÄxÖá½ÇËÙ¶È
+   89          
+   90          void Gyro_Init_And_Calibrate(void) {
+   91   1          int32 offset_sum_z = 0;
+   92   1          int32 offset_sum_x = 0; // ¡¾ÐÂÔö¡¿
+   93   1          int i;
+   94   1          
+   95   1          if(imu660rb_init()) {
+   96   2              printf("\r\nIMU660RB init error.");
+   97   2              while(1); 
+   98   2          }
+   99   1          
+  100   1          system_delay_ms(100); 
+  101   1          for(i = 0; i < 200; i++) {
+  102   2              imu660rb_get_gyro();
+  103   2              offset_sum_z += imu660rb_gyro_z;
+  104   2              offset_sum_x += imu660rb_gyro_x; // ¡¾ÐÂÔö¡¿ÀÛ¼ÓYÖá
+  105   2              system_delay_ms(2);
+  106   2          }
+  107   1          gyro_z_offset = (float)offset_sum_z / 200.0f;
+  108   1          gyro_x_offset = (float)offset_sum_x / 200.0f; // ¡¾ÐÂÔö¡¿Ëã³öYÖáÁãÆ«
+  109   1          printf("\r\nGyro Z Offset: %.2f", gyro_z_offset);
+  110   1      }
+  111          void pit_hanlder (void) {
+  112   1                 
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 3   
+
+  113   1          // 1. »ñÈ¡×îÐÂÊý¾Ý
+  114   1          imu660rb_get_gyro(); 
+  115   1          
+  116   1          // 2. ¼õÈ¥ÁãÆ«£¬µÃµ½ÕæÊµ½ÇËÙ¶È
+  117   1          true_gyro_z = (float)imu660rb_gyro_z - gyro_z_offset;
+  118   1              true_gyro_x = (float)imu660rb_gyro_x - gyro_x_offset;
+  119   1          
+  120   1          // 3. ËÀÇøÂË²¨£ºÌÞ³ý¼«ÆäÎ¢Ð¡µÄÕð¶¯Ôëµã
+  121   1          if (true_gyro_z < 5.0f && true_gyro_z > -5.0f) {
+  122   2              true_gyro_z = 0;
+  123   2          }
+  124   1          
+  125   1              if (true_gyro_x < 10.0f && true_gyro_x > -10.0f) {
+  126   2              true_gyro_x = 0;
+  127   2          }
+  128   1              
+  129   1          // 4. ½Ç¶È»ý·Ö¹«Ê½
+  130   1          // ³ËÒÔ 0.005 ÊÇÒòÎªÖÐ¶ÏÊÇ 5ms (0.005Ãë)
+  131   1          angle_z += (true_gyro_z / 13.98f) * 0.005f; 
+  132   1      }
+  133          // Êý¾Ý´æ´¢Ïà¹Ø
+  134          //pid_data_t pid_data[DATA_SIZE];
+  135          //int data_index = 0;
+  136          //int collecting = 1;
+  137          //volatile int data_ready = 0;
+  138          
+  139          //-------------------------------------------------------------------------------------------------------
+             -------------
+  140          // ÏµÍ³³õÊ¼»¯
+  141          //-------------------------------------------------------------------------------------------------------
+             -------------
+  142          void System_Init(void)
+  143          {
+  144   1          // Öð·É¿â±ØÐëµÄ³õÊ¼»¯
+  145   1          clock_init(SYSTEM_CLOCK_30M);      // ÏµÍ³Ê±ÖÓ³õÊ¼»¯Îª30MHz
+  146   1          debug_init();                       // µ÷ÊÔ´®¿Ú³õÊ¼»¯ - Õ¼ÓÃ P31(TX) ºÍ P30(RX)UARTÒý½Å
+  147   1          
+  148   1          // ¸÷Ä£¿é³õÊ¼»¯
+  149   1          Sensor_Init();
+  150   1          
+  151   1              // ¡¾ÐÂÔö 2¡¿£ºÆÁÄ»Óë°´¼üµÄ³õÊ¼»¯
+  152   1          ips200_init();                                 // ³õÊ¼»¯IPS200ÆÁÄ»
+  153   1          ips200_clear(RGB565_BLACK);                    // Ô¤ÏÈÇåË¢
+  154   1          gpio_init(KEY_PIN, GPI, 1, GPI_PULL_UP);       // ³õÊ¼»¯ P7.0 Îª°´¼üÊäÈë£¬ÄÚ²¿ÉÏÀ­
+  155   1              gpio_init(RUN_KEY_PIN, GPI, 1, GPI_PULL_UP);   // ³õÊ¼»¯ P7.1 ·¢³µ°´¼ü
+  156   1              
+  157   1          //µç»úÄ£¿é³õÊ¼»¯
+  158   1          gpio_init(LED1, GPO, 1, GPO_PUSH_PULL);
+  159   1              
+  160   1              pwm_init(PWM_R, 1000, 0);                                                                                               // ³õÊ¼»¯ÓÒµç»ú PWM Òý½Å£¬ÆµÂÊÎª 1000 Hz£¬³õÊ¼Õ¼¿Õ±ÈÎª 0
+  161   1              gpio_init(DIR_R, GPO, 1, GPO_PUSH_PULL);                                                                        // ³õÊ¼»¯ÓÒµç»ú·½Ïò¿ØÖÆÒý½ÅÎªÍÆÍìÊä³ö£¬³õÊ¼µçÆ½Îª 1
+  162   1                                      
+  163   1              pwm_init(PWM_L, 1000, 0);                                                                                               // ³õÊ¼»¯×óµç»ú PWM Òý½Å£¬ÆµÂÊÎª 1000 Hz£¬³õÊ¼Õ¼¿Õ±ÈÎª 0
+  164   1              gpio_init(DIR_L, GPO, 1, GPO_PUSH_PULL);                                                                        // ³õÊ¼»¯×óµç»ú·½Ïò¿ØÖÆÒý½ÅÎªÍÆÍìÊä³ö£¬³õÊ¼µçÆ½Îª 1
+  165   1                                      
+  166   1              encoder_dir_init(ENCODER_R, ENCODER_DIR_R, ENCODER_COUNT_R);                            // ³õÊ¼»¯ÓÒµç»ú±àÂëÆ÷£¬Ö¸¶¨·½ÏòÒý½ÅºÍ¼
+             -ÆÊýÒý½Å
+  167   1              encoder_dir_init(ENCODER_L, ENCODER_DIR_L, ENCODER_COUNT_L);                            // ³õÊ¼»¯×óµç»ú±àÂëÆ÷£¬Ö¸¶¨·½ÏòÒý½ÅºÍ¼
+             -ÆÊýÒý½Å
+  168   1                                      
+  169   1              pwm_set_freq(PWM_R, 500, 5000);                                                                                         // ÉèÖÃÓÒµç»ú PWM ÆµÂÊÎª 500 Hz£¬Õ¼¿Õ±ÈÎª 50%£¨5000 ¶ÔÓ¦ 50%
+             -£©£¬ÓÃÓÚÇý¶¯Ð£×¼Áãµã
+  170   1              pwm_set_freq(PWM_L, 500, 5000);                                                                                         // ÉèÖÃ×óµç»ú PWM ÆµÂÊÎª 500 Hz£¬Õ¼¿Õ±ÈÎª 50%£¨5000 ¶ÔÓ¦ 50%
+             -£©£¬ÓÃÓÚÇý¶¯Ð£×¼Áãµã
+  171   1                                      
+  172   1              system_delay_ms(3000);                                                                                                          // ÑÓ³Ù 3000 ms£¬µÈ´ýÇý¶¯°åÍê³ÉÁãµãÐ£×¼
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 4   
+
+  173   1                                      
+  174   1              pwm_set_freq(PWM_R, 1000, 0);                                                                                           // »Ö¸´ÓÒµç»ú PWM ÆµÂÊÎª 1000 Hz£¬Õ¼¿Õ±ÈÎª 0£¬×¼±¸½øÈëÕý³£¿ØÖ
+             -Æ
+  175   1              pwm_set_freq(PWM_L, 1000, 0);                                                                                           // »Ö¸´×óµç»ú PWM ÆµÂÊÎª 1000 Hz£¬Õ¼¿Õ±ÈÎª 0£¬×¼±¸½øÈëÕý³£¿ØÖ
+             -Æ
+  176   1              
+  177   1              // ´Ë´¦±àÐ´ÓÃ»§´úÂë ÀýÈçÍâÉè³õÊ¼»¯´úÂëµÈ
+  178   1              pit_ms_init(TIM1_PIT, 5);                                                                                                       // ³õÊ¼»¯ PIT ¶¨Ê±Æ÷,¶¨Ê±ÖÜÆÚÎª 5 ms
+  179   1              // ³õÊ¼»¯ÎÞÏß´®¿Ú
+  180   1              Gyro_Init_And_Calibrate();                                                  //³õÊ¼»¯ÍÓÂÝÒÇ
+  181   1              
+  182   1          if(wireless_uart_init())
+  183   1          {
+  184   2              // ³õÊ¼»¯Ê§°ÜÊ±¿ÉÒÔÔÚ´Ë´¦Àí£¨µ±Ç°½ö¼òµ¥¶Ï¿ªÑ­»·£©
+  185   2              while(1);
+  186   2          }
+  187   1                      
+  188   1                      
+  189   1          system_delay_ms(100);                
+  190   1      }
+  191          //ËÙ¶È»·Ïà¹Øº¯ÊýÉùÃ÷
+  192          void speed_control();
+  193          void speed_get();
+  194          void speed_calculate();
+  195          void speed_out();
+  196          
+  197          //µ÷ÊÔº¯ÊýÉùÃ÷
+  198          void data_show();
+  199          
+  200          //×ªÏò»·Ïà¹Øº¯ÊýÉùÃ÷
+  201          void dir_get();
+  202          void dir_calculate();
+  203          void dir_control();
+  204          
+  205          //void output_all_data();
+  206          
+  207          //Ñ²Ïßº¯Êý
+  208          void patrol_line();
+  209          
+  210          //-------------------------------------------------------------------------------------------------------
+             -------------
+  211          // Ö÷º¯Êý
+  212          //-------------------------------------------------------------------------------------------------------
+             -------------
+  213          void main(void)
+  214          {
+  215   1          System_Init();
+  216   1          ips200_set_color(RGB565_WHITE, RGB565_BLACK);
+  217   1      
+  218   1         
+  219   1          pwm_init(PWM_PIN, PWM_FREQ, 0);
+  220   1          system_delay_ms(50);
+  221   1          
+  222   1          
+  223   1          tim1_irq_handler = patrol_line;
+  224   1      
+  225   1              
+  226   1          while(1)
+  227   1          {
+  228   2              data_show();
+  229   2              system_delay_ms(10);
+  230   2          }
+  231   1      }
+  232          void dir_get(){
+  233   1          // ¶ÁÈ¡´«¸ÐÆ÷
+  234   1                      Sensor_Read_Normalized();
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 5   
+
+  235   1                      //Sensor_Monitor();
+  236   1              
+  237   1          // ¼ÆËãÎó²î
+  238   1          error_value = Error_Calculate(L1_norm, L2_norm, L3_norm, L4_norm);
+  239   1      }
+  240          
+  241          void dir_calculate(void) {
+  242   1          // 1. ÑÏ¸ñ×ñÊØ C89£ºÏÈÔÚ×îÇ°ÃæÉùÃ÷ËùÓÐ±äÁ¿
+  243   1          float e;
+  244   1          float abs_e;
+  245   1          
+  246   1          // 2. È»ºóÔÙ½øÐÐ¸³ÖµºÍ¼ÆËã
+  247   1          e = error_value;
+  248   1          abs_e = (e >= 0) ? e : -e;
+  249   1      
+  250   1          dir_output = Kp1_dir * e + Kp2_dir * e * abs_e + Kd_dir * (e - prev_e_dir);
+  251   1          
+  252   1      
+  253   1          if (dir_output > 1.3f) dir_output = 1.3f;
+  254   1          if (dir_output < -1.3f) dir_output = -1.3f;    
+  255   1                 
+  256   1          prev_e_dir = e;
+  257   1      }
+  258          
+  259          void dir_control(){
+  260   1          dir_get();
+  261   1          dir_calculate();
+  262   1      }
+  263          
+  264          void patrol_line() {
+  265   1              
+  266   1              static uint8 led_blink_timer = 0; 
+  267   1          float min_speed = 0.05f;
+  268   1              
+  269   1          // 1. ¶¯Ì¬»ù´¡ËÙ¶È£ºÄ¬ÈÏÊ¹ÓÃÖ±µÀËÙ¶È 1.7m/s
+  270   1          float active_speed = target_speed; 
+  271   1              
+  272   1              pit_hanlder();
+  273   1          dir_get(); 
+  274   1              
+  275   1              //·¢³µ±£»¤Ëø
+  276   1              if (car_running == 0) {
+  277   2              pwm_set_duty(PWM_L, 0); // Ç¿ÖÆ×óÂÖ¶Ïµç
+  278   2              pwm_set_duty(PWM_R, 0); // Ç¿ÖÆÓÒÂÖ¶Ïµç
+  279   2              return; // Ö±½Ó return£¡²»Ö´ÐÐºóÃæµÄÂ·¾¶Ê¶±ðºÍ PID ËãÁ¦£¡
+  280   2          }
+  281   1          
+  282   1          // ¶ªÏß±£»¤
+  283   1          if (L1_norm < 5 && L2_norm < 5 && L3_norm < 5 && L4_norm < 5) {
+  284   2              lost_line_timer++;
+  285   2              if (lost_line_timer > 100) { 
+  286   3                  target_speed_L = 0;
+  287   3                  target_speed_R = 0;
+  288   3                  speed_control();
+  289   3                  return; 
+  290   3              }
+  291   2          } else {
+  292   2              lost_line_timer = 0; 
+  293   2          }
+  294   1      
+  295   1          Path_Identify(); 
+  296   1      
+  297   1          // ================= Â·¾¶¾ö²ß·ÖÖ§ =================
+  298   1      
+  299   1          if (current_path_type == PATH_CROSS) {
+  300   2              //¸ß¼¶°æ - ÓÃÍÓÂÝÒÇÑ¹ÖÆ×ªÏò
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 6   
+
+  301   2              dir_output = angle_z * 0.05f; // Èç¹û³µÍ·Æ«ÁË£¬²úÉú·´ÏòµÖ¿¹Á¦
+  302   2          }
+  303   1      
+  304   1          else if (current_path_type == PATH_ROUNDABOUT) {
+  305   2              if (round_step == ROUND_FOUND) {
+  306   3                  round_step = ROUND_DELAY;
+  307   3                  action_timer = 0; 
+  308   3              }
+  309   2              else if (round_step == ROUND_DELAY) {
+  310   3                  dir_output = last_stable_dir * 0.5f; 
+  311   3                  action_timer++;
+  312   3      
+  313   3                  // ÕâÀïµÄÖ±µÀ»¬ÐÐÑÓÊ±ÒÀÈ»ÓÃ timer ×îÎÈ£¨ÒòÎª³µÉí»¹Ã»¿ªÊ¼×ª£¬ÍÓÂÝÒÇÃ»±ä»¯£©
+  314   3                  if (round_direction == 1 && action_timer > 10) {  
+  315   4                      round_step = ROUND_IN; 
+  316   4                      angle_z = 0; // ¡¾¹Ø¼ü¡¿¿ªÊ¼×ªÍäÇ°£¬°Ñ½Ç¶ÈÇåÁã£¡
+  317   4                  } 
+  318   3                  else if (round_direction == -1 && action_timer > 14) {  
+  319   4                      round_step = ROUND_IN; 
+  320   4                      angle_z = 0; // ¡¾¹Ø¼ü¡¿¿ªÊ¼×ªÍäÇ°£¬°Ñ½Ç¶ÈÇåÁã£¡
+  321   4                  }
+  322   3              }
+  323   2              else if (round_step == ROUND_IN) {
+  324   3                  if (round_direction == 1) {
+  325   4                      dir_output = -4.0f; 
+  326   4                      // ¡¾ÍÓÂÝÒÇ½Ó¹Ü¡¿£º²»ÓÃ¹ÜÊ±¼ä£¬³µÍ·Ö»ÒªÊµ´òÊµµØ×ªÁË 45 ¶È£¬Á¢Âí½áÊøÈë»·£¡
+  327   4                      if (angle_z > 45.0f) { 
+  328   5                          round_step = ROUND_MID; 
+  329   5                      }
+  330   4                  } else {
+  331   4                      dir_output = 3.5f; 
+  332   4                      if (angle_z < -45.0f) { 
+  333   5                          round_step = ROUND_MID; 
+  334   5                      }
+  335   4                  }
+  336   3      
+  337   3                  target_speed_L = active_speed - dir_output;
+  338   3                  target_speed_R = active_speed + dir_output;
+  339   3                  speed_control();
+  340   3                  return; 
+  341   3              }
+  342   2              else if (round_step == ROUND_MID) {
+  343   3                  dir_calculate(); 
+  344   3                  dir_output += (float)round_direction * 0.25f; 
+  345   3              }
+  346   2              else if (round_step == ROUND_OUT) {
+  347   3                  dir_calculate();
+  348   3                  dir_output -= (float)round_direction * 0.8f; 
+  349   3      
+  350   3                  // ¡¾ÍÓÂÝÒÇ³ö»·½Ó¹Ü¡¿£º³ö»·Ê±·´ÏòÀ­³¶£¬Ö»Òª³µÍ·Ë¦»ØÁË´ó¸Å 35 ¶È£¬ÍêÃÀÇÐ»ØÖ±µÀ£¡
+  351   3                  if (round_direction == 1) {
+  352   4                      if (angle_z > 35.0f) Path_Reset(); // ÓÒ»·³öÀ´ÍùÓÒË¦
+  353   4                  } else {
+  354   4                      if (angle_z < -35.0f) Path_Reset();  // ×ó»·³öÀ´Íù×óË¦
+  355   4                  }
+  356   3              }
+  357   2              }
+  358   1          if (current_path_type == PATH_NORMAL) {
+  359   2              dir_calculate(); 
+  360   2                      last_stable_dir = dir_output;
+  361   2          }
+  362   1          
+  363   1          target_speed_L = active_speed - dir_output;
+  364   1          target_speed_R = active_speed + dir_output;
+  365   1      
+  366   1          speed_control();
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 7   
+
+  367   1              
+  368   1          // ¡¾ÐÂÔö¡¿·Ç×èÈûÊ½ LED »·µºÖ¸Ê¾µÆ
+  369   1          // ---------------------------------------------------------
+  370   1          // ¾²Ì¬±äÁ¿¼ÆÊýÆ÷£¬Ã¿´Î½ø 5ms ÖÐ¶Ï¼Ó 1
+  371   1      
+  372   1          // Èç¹ûµ±Ç°×´Ì¬ÊÇ»·µº£¨²»¹ÜÊÇÄÄ¸ö½×¶Î£©
+  373   1          if (current_path_type == PATH_ROUNDABOUT) {
+  374   2              // ¼ÙÉèµÍµçÆ½(0)µãÁÁ£¬¸ßµçÆ½(1)Ï¨Ãð¡£Èç¹ûÄãµÄµÆ·´ÁË£¬¾Í°Ñ 0 ºÍ 1 »¥»»¡£
+  375   2              P52 = 0; 
+  376   2          } 
+  377   1          else {
+  378   2              P52 = 1; 
+  379   2          }
+  380   1      }
+  381                  
+  382          void speed_control(){
+  383   1           speed_get();
+  384   1           speed_calculate();
+  385   1                 speed_out();
+  386   1      }
+  387          
+  388          void speed_get(){
+  389   1          right_encoder_data = encoder_get_count(ENCODER_R);    // »ñÈ¡ÓÒµç»ú±àÂëÆ÷¼ÆÊýÊý¾Ý
+  390   1          left_encoder_data  = -encoder_get_count(ENCODER_L);    // »ñÈ¡×óµç»ú±àÂëÆ÷¼ÆÊýÊý¾Ý
+  391   1      
+  392   1          encoder_clear_count(ENCODER_R);    // ÇåÁãÓÒµç»ú±àÂëÆ÷¼ÆÊý
+  393   1          encoder_clear_count(ENCODER_L);    // ÇåÁã×óµç»ú±àÂëÆ÷¼ÆÊý
+  394   1      }
+  395          
+  396          void speed_calculate(void) {
+  397   1          // 1. ÑÏ¸ñ×ñÊØ C89£º¼¯ÖÐÉùÃ÷ËùÓÐÁÙÊ±±äÁ¿
+  398   1          float eL, eR, ff_L, ff_R;
+  399   1      
+  400   1          // 2. È»ºóÔÙ½øÐÐ¼ÆËã (´øÉÏ 'f' ºó×º£¬·ÀÖ¹±àÒëÆ÷°ÑËüµ±³É double ±¨´í)
+  401   1          eL = (float)(target_speed_L - left_encoder_data * 0.003518f);
+  402   1          eR = (float)(target_speed_R - right_encoder_data * 0.003518f);
+  403   1      
+  404   1          ff_L = target_speed_L * KF_L;
+  405   1          ff_R = target_speed_R * KF_R;
+  406   1      
+  407   1          // 3. Î»ÖÃÊ½ PD ¹«Ê½
+  408   1          duty_L = Kp_L * eL + Kd_L * (eL - prev_e_L) + ff_L;
+  409   1          duty_R = Kp_R * eR + Kd_R * (eR - prev_e_R) + ff_R;
+  410   1      
+  411   1          // È«¾ÖÏÞ·ù
+  412   1          if (duty_L > MAX_DUTY)  duty_L = MAX_DUTY;
+  413   1          if (duty_L < -MAX_DUTY) duty_L = -MAX_DUTY;
+  414   1          if (duty_R > MAX_DUTY)  duty_R = MAX_DUTY;
+  415   1          if (duty_R < -MAX_DUTY) duty_R = -MAX_DUTY;
+  416   1      
+  417   1          // ¸üÐÂÀúÊ·¼ÇÂ¼
+  418   1          prev_e_L = eL;
+  419   1          prev_e_R = eR;
+  420   1      }
+  421          
+  422          void speed_out(){
+  423   1      //    if (!collecting) {
+  424   1      //        pwm_set_duty(PWM_L, 0);
+  425   1      //        pwm_set_duty(PWM_R, 0);
+  426   1      //        return;
+  427   1      //    }
+  428   1          // ¡¾ÖÕ¼«ÈÚºÏÂß¼­¡¿£º¶¯Ì¬·À±§ËÀÏÞ·ù
+  429   1          // Ö»ÓÐÔÚÆÕÍ¨ÈüµÀ£¨³¤Ö±µÀ/»ºÍä£©Ê±£¬²ÅÇ¿ÖÆÂÖ×Ó±£³ÖÎ¢ÈõÕý×ª£¬·ÀÖ¹¶¶¶¯ºÍË¦Î²¡£
+  430   1          if (current_path_type == PATH_NORMAL) {
+  431   2              if (duty_L < 0.5f) duty_L = 0.5f; 
+  432   2              if (duty_R < 0.5f) duty_R = 0.5f; 
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 8   
+
+  433   2          }
+  434   1                      
+  435   1          if(duty_L >= 0)                                                                             // µ±Õ¼¿Õ±ÈÎª·Ç¸ºÊýÊ±£¬µç
+             -»úÕý×ª
+  436   1          {
+  437   2              pwm_set_duty(PWM_L, (int32)(duty_L * (PWM_DUTY_MAX / 100)) + DEADZONE_L);     // ¼ÆËã²¢Êä³öÕ¼¿Õ±È
+             -£¨¼ÓÉÏ 10% ÐÅºÅËÀÇø£©
+  438   2              gpio_set_level(DIR_L, 1);                                                               // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  439   2          }
+  440   1          else                                                                                        // µç»ú·´×ª
+  441   1          {
+  442   2              pwm_set_duty(PWM_L, (int32)((-duty_L) * (PWM_DUTY_MAX / 100)) + DEADZONE_L);  // ¼ÆËã²¢Êä³öÕ¼¿Õ±È
+             -£¨¼ÓÉÏ 10% ÐÅºÅËÀÇø£©
+  443   2              gpio_set_level(DIR_L, 0);                                                               // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  444   2                                                                              // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  445   2          }
+  446   1          if(duty_R >= 0)                                                                             // µ±Õ¼¿Õ±ÈÎª·Ç¸ºÊýÊ±£¬µç
+             -»úÕý×ª
+  447   1          {
+  448   2              pwm_set_duty(PWM_R, (int32)(duty_R * (PWM_DUTY_MAX / 100)) + DEADZONE_R);     // ¼ÆËã²¢Êä³öÕ¼¿Õ±È
+             -£¨¼ÓÉÏ 10% ÐÅºÅËÀÇø£©
+  449   2              gpio_set_level(DIR_R, 0);                                                               // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  450   2          }
+  451   1          else                                                                                        // µç»ú·´×ª
+  452   1          {
+  453   2              pwm_set_duty(PWM_R, (int32)((-duty_R) * (PWM_DUTY_MAX / 100)) + DEADZONE_R);  // ¼ÆËã²¢Êä³öÕ¼¿Õ±È
+             -£¨¼ÓÉÏ 10% ÐÅºÅËÀÇø£©
+  454   2              gpio_set_level(DIR_R, 1);                                                               // Êä³öµç»úÐý×ª·½ÏòÐÅºÅ
+  455   2          }
+  456   1      }
+  457          void data_show(){
+  458   1          char buf[128];
+  459   1      
+  460   1          // ¸ñÊ½»¯²¢Í¨¹ýÎÞÏß´®¿Ú·¢ËÍ
+  461   1          //sprintf(buf, "%.2f,%.2f,%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.00351
+             -8,target_speed_R,target_speed_L,dir_output);
+  462   1          sprintf(buf, "%.1f,%.1f,%.1f,%.1f,%.2f,%.2f\n", 
+  463   1                  L1_norm, 
+  464   1                  L2_norm, 
+  465   1                  L3_norm, 
+  466   1                  L4_norm, 
+  467   1                  true_gyro_z, 
+  468   1                  true_gyro_x);
+  469   1      
+  470   1              wireless_uart_send_string(buf);
+  471   1      
+  472   1              // 2. ÐÂÔö£º°´¼üÉ¨ÃèÓë×´Ì¬ÇÐ»»
+  473   1          // --------------------------------------------------------
+  474   1          if(gpio_get_level(KEY_PIN) == 0)            
+  475   1          {
+  476   2              system_delay_ms(20); // ÑÓÊ±20msÏû¶¶                    
+  477   2              if(gpio_get_level(KEY_PIN) == 0)        
+  478   2              {
+  479   3                  display_mode = !display_mode;       // ÇÐ»»ÏÔÊ¾Ä£Ê½
+  480   3                  ips200_clear(RGB565_BLACK);         // ÇåÆÁ·ÀÖ¹²ÐÓ°
+  481   3                  
+  482   3                  // ËÀÑ­»·µÈ´ýËÉÊÖ£¨ÒòÎªÑ°ÏßÔÚ¶¨Ê±Æ÷ÖÐ¶ÏÀï£¬ËùÒÔÕâÀïËÀµÈ²»»áÈÃ³µÊ§¿Ø£©
+  483   3                  while(gpio_get_level(KEY_PIN) == 0); 
+  484   3              }
+  485   2          }
+  486   1      
+  487   1              if(gpio_get_level(RUN_KEY_PIN) == 0)            
+  488   1          {
+  489   2              system_delay_ms(20); // Ïû¶¶ 
+  490   2              if(gpio_get_level(RUN_KEY_PIN) == 0)        
+  491   2              {
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 9   
+
+  492   3                  car_running = !car_running; // ×´Ì¬·´×ª£ºÍ£³µ±äÆðÅÜ£¬ÆðÅÜ±äÍ£³µ£¡
+  493   3                              // Áª¶¯¿ØÖÆ¸ºÑ¹·çÉÈ
+  494   3                  if (car_running == 1) {
+  495   4                      // ÆðÅÜ£º¿ªÆô·çÉÈ£¬ÎüÅÌÎü½ôµØÃæ£¡
+  496   4                      pwm_set_duty(PWM_PIN, MOTOR_SPEED_DUTY); 
+  497   4                  } else {
+  498   4                      // Í£³µ£º¹Ø±Õ·çÉÈ
+  499   4                      pwm_set_duty(PWM_PIN, 0); 
+  500   4                  }
+  501   3                              
+  502   3                  ips200_clear(RGB565_BLACK); // Ë¢ÇåÆÁÄ»·ÀÖ¹ÎÄ×ÖÖØµþ
+  503   3                  while(gpio_get_level(RUN_KEY_PIN) == 0); // µÈ´ýËÉÊÖ 
+  504   3              }
+  505   2          }
+  506   1              
+  507   1          // --------------------------------------------------------
+  508   1          // 3. ÐÂÔö£ºÆÁÄ»·ÖÆÁäÖÈ¾Âß¼­
+  509   1          // --------------------------------------------------------
+  510   1          if(display_mode == 0)
+  511   1          {
+  512   2              // Ä£Ê½0£ºÏÔÊ¾¹éÒ»»¯Öµ (Norm 0 ~ 128)
+  513   2              ips200_show_string(0, 16*0, "--- Mode: NORM ---"); 
+  514   2              ips200_show_string(0, 16*1, "L1_Norm: "); ips200_show_float(72, 16*1, L1_norm, 3, 1);     
+  515   2              ips200_show_string(0, 16*2, "L2_Norm: "); ips200_show_float(72, 16*2, L2_norm, 3, 1);     
+  516   2              ips200_show_string(0, 16*3, "L3_Norm: "); ips200_show_float(72, 16*3, L3_norm, 3, 1);     
+  517   2              ips200_show_string(0, 16*4, "L4_Norm: "); ips200_show_float(72, 16*4, L4_norm, 3, 1);     
+  518   2          }
+  519   1          else
+  520   1          {
+  521   2              // Ä£Ê½1£ºÏÔÊ¾µ×²ãÔ­Ê¼ ADC Öµ (Raw)
+  522   2              ips200_show_string(0, 16*0, "--- Mode: RAW  ---"); 
+  523   2              ips200_show_string(0, 16*1, "L1_Raw : "); ips200_show_int32(72, 16*1, L1_raw, 3);     
+  524   2              ips200_show_string(0, 16*2, "L2_Raw : "); ips200_show_int32(72, 16*2, L2_raw, 3);     
+  525   2              ips200_show_string(0, 16*3, "L3_Raw : "); ips200_show_int32(72, 16*3, L3_raw, 3);     
+  526   2              ips200_show_string(0, 16*4, "L4_Raw : "); ips200_show_int32(72, 16*4, L4_raw, 3);     
+  527   2          }
+  528   1      
+  529   1          // --------------------------------------------------------
+  530   1          // 4. ÐÂÔö£º°ÑÍÓÂÝÒÇºËÐÄÊý¾Ý¹ÒÔÚ×îÏÂ·½£¬·½±ãËæÊ±²é¿´
+  531   1          // --------------------------------------------------------
+  532   1          ips200_show_string(0, 16*6, "Angle Z: "); 
+  533   1          ips200_show_float(72, 16*6, angle_z, 4, 1);       // ÊµÊ±ÏÔÊ¾¾ø¶Ô½Ç¶È
+  534   1          
+  535   1          ips200_show_string(0, 16*7, "Gyro  Z: "); 
+  536   1          ips200_show_float(72, 16*7, true_gyro_z, 4, 1);   // ÊµÊ±½ÇËÙ¶È£¬»Î¶¯³µÉí¿´ËüÌø¶¯
+  537   1              
+  538   1              // ¡¾ÐÂÔöµÄ Y ÖáÆÁÄ»´òÓ¡¡¿
+  539   1          // Äã¿ÉÒÔÓÃÊÖÃÍÁÒÌ§Æð³µÍ·£¬¿´¿´Õâ¸öÊý×Ö»á²»»áË²¼äì­Éýµ½ 150 ÒÔÉÏ£¡
+  540   1          ips200_show_string(0, 16*8, "Gyro  X: "); 
+  541   1          ips200_show_float(72, 16*8, true_gyro_x, 4, 1);
+  542   1              
+  543   1         // sprintf(buf, "duty_L:%d error_L:%.2f duty_R:%d error_R:%.2f\r\n", duty_L, error_L, duty_R, error_R)
+             -;
+  544   1         // wireless_uart_send_string(buf);
+  545   1      
+  546   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =      3882     ------
+  ecode size           =    ------     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =       218     ------
+  xdata-const size     =    ------     ------
+C251 COMPILER V5.60.0,  main                                                               09/06/26  21:58:50  PAGE 10  
+
+  edata size           =        24     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =       446     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
