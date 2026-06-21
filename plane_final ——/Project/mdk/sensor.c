@@ -3,14 +3,14 @@
 
 // ================= 1. 归一化参数配置区 =================
 
-#define L1_MAX  132
+#define L1_MAX  140
 #define L1_MIN  10
-#define L2_MAX  94
-#define L2_MIN  17
-#define L3_MAX  102
-#define L3_MIN  15
-#define L4_MAX  130
-#define L4_MIN  12
+#define L2_MAX  106
+#define L2_MIN  15
+#define L3_MAX  109
+#define L3_MIN  10
+#define L4_MAX  140
+#define L4_MIN  10
 
 
 // 全局变量声明（供外部文件调用计算误差）

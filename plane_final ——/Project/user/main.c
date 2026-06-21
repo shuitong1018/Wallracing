@@ -34,7 +34,7 @@ uint8 car_running = 0;                   // 0: 停车看数据状态, 1: 狂飙状态
 
 #define PWM_FREQ           (500)                      // PWM频率 
 #define PWM_PIN            (PWMB_CH3_P33)              // 使用P33引脚
-#define MOTOR_SPEED_DUTY   (3000)                      // 固定转速占空比（0-10000）
+#define MOTOR_SPEED_DUTY   (4000)                      // 固定转速占空比（0-10000）
 
 #define DATA_SIZE 800
 
@@ -63,9 +63,9 @@ int16 edata left_encoder_data = 0;                                              
 
 uint16 action_timer = 0;
 
-const float Kp_L = 12, Kd_L = 19;                                      					// 左电机 PID 控制参数
-const float Kp_R = 11.5, Kd_R = 19;                                                     // 右电机 PID 控制参数
-const float KF_L = 10.9,KF_R =10.3;
+const float Kp_L = 6.5, Kd_L = 5;                                      					// 左电机 PID 控制参数
+const float Kp_R = 6.0, Kd_R = 5;                                                     // 右电机 PID 控制参数
+const float KF_L = 15.4,KF_R =15.6;
 /* 上一周期的（测量-目标）误差，用于计算微分项（delta error） */
 float edata prev_e_L = 0.0f, prev_e_R = 0.0f;
 
@@ -202,6 +202,9 @@ void dir_get();
 void dir_calculate();
 void dir_control();
 
+// PWM 缓启动函数声明
+void pwm_soft_start(pwm_channel_enum pin, uint32 target_duty, uint16 step, uint16 interval_ms);
+
 //void output_all_data();
 
 //巡线函数
@@ -215,18 +218,16 @@ void main(void)
     System_Init();
     ips200_set_color(RGB565_WHITE, RGB565_BLACK);
 
-   
     pwm_init(PWM_PIN, PWM_FREQ, 0);
-    system_delay_ms(50);
-    
-    
+    pwm_set_duty(PWM_PIN, 0);                          // 初始化风扇为关闭状态
+
     tim1_irq_handler = patrol_line;
 
 	
     while(1)
     {
         data_show();
-        system_delay_ms(10);
+        system_delay_ms(5);
     }
 }
 void dir_get(){
@@ -276,6 +277,7 @@ void patrol_line() {
 	if (car_running == 0) {
         pwm_set_duty(PWM_L, 0); // 强制左轮断电
         pwm_set_duty(PWM_R, 0); // 强制右轮断电
+        pwm_set_duty(PWM_PIN, 0); // 强制 风扇 断电
         return; // 直接 return！不执行后面的路径识别和 PID 算力！
     }
     
@@ -454,48 +456,62 @@ void speed_out(){
         gpio_set_level(DIR_R, 1);                                         			// 输出电机旋转方向信号
     }
 }
+
+void pwm_soft_start(pwm_channel_enum pin, uint32 target_duty, uint16 step, uint16 interval_ms)
+{
+    uint32 duty;
+
+    pwm_set_duty(pin, 0);
+    for (duty = 0; duty < target_duty; duty += step)
+    {
+        pwm_set_duty(pin, duty);
+        system_delay_ms(interval_ms);
+    }
+    pwm_set_duty(pin, target_duty);
+}
+
 void data_show(){
     char buf[128];
 
     // 格式化并通过无线串口发送
-    //sprintf(buf, "%.2f,%.2f,%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.003518,target_speed_R,target_speed_L,dir_output);
-    sprintf(buf, "%.1f,%.1f,%.1f,%.1f,%.2f,%.2f\n", 
-            L1_norm, 
-            L2_norm, 
-            L3_norm, 
-            L4_norm, 
-            true_gyro_z, 
-            true_gyro_x);
+    sprintf(buf, "%.2f,%.2f,%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.003518,target_speed_R,target_speed_L,dir_output);
+//    sprintf(buf, "%.1f,%.1f,%.1f,%.1f,%.2f,%.2f\n", 
+//            L1_norm, 
+//            L2_norm, 
+//            L3_norm, 
+//            L4_norm, 
+//            true_gyro_z, 
+//            true_gyro_x);
 
 	wireless_uart_send_string(buf);
 
-	// 2. 新增：按键扫描与状态切换
-    // --------------------------------------------------------
-    if(gpio_get_level(KEY_PIN) == 0)            
-    {
-        system_delay_ms(20); // 延时20ms消抖                    
-        if(gpio_get_level(KEY_PIN) == 0)        
-        {
-            display_mode = !display_mode;       // 切换显示模式
-            ips200_clear(RGB565_BLACK);         // 清屏防止残影
-            
-            // 死循环等待松手（因为寻线在定时器中断里，所以这里死等不会让车失控）
-            while(gpio_get_level(KEY_PIN) == 0); 
-        }
-    }
+//	// 2. 新增：按键扫描与状态切换
+//    // --------------------------------------------------------
+//    if(gpio_get_level(KEY_PIN) == 0)            
+//    {
+//        system_delay_ms(20); // 延时20ms消抖                    
+//        if(gpio_get_level(KEY_PIN) == 0)        
+//        {
+//            display_mode = !display_mode;       // 切换显示模式
+//            ips200_clear(RGB565_BLACK);         // 清屏防止残影
+//            
+//            // 死循环等待松手（因为寻线在定时器中断里，所以这里死等不会让车失控）
+//            while(gpio_get_level(KEY_PIN) == 0); 
+//        }
+//    }
 
 	if(gpio_get_level(RUN_KEY_PIN) == 0)            
     {
         system_delay_ms(20); // 消抖 
         if(gpio_get_level(RUN_KEY_PIN) == 0)        
         {
-            car_running = !car_running; // 状态反转：停车变起跑，起跑变停车！
-			// 联动控制负压风扇
-            if (car_running == 1) {
-                // 起跑：开启风扇，吸盘吸紧地面！
-                pwm_set_duty(PWM_PIN, MOTOR_SPEED_DUTY); 
+            if (car_running == 0) {
+                // 停车 -> 起跑：先缓启动风扇，风扇完全启动后再开始气跑
+                pwm_soft_start(PWM_PIN, MOTOR_SPEED_DUTY, 100, 10);  // 阻塞等待缓启动完成
+                car_running = 1;  // 风扇启动完成后才设置运行状态
             } else {
-                // 停车：关闭风扇
+                // 起跑 -> 停车：关闭车子和风扇
+                car_running = 0;
                 pwm_set_duty(PWM_PIN, 0); 
             }
 			
@@ -504,43 +520,43 @@ void data_show(){
         }
     }
 	
-    // --------------------------------------------------------
-    // 3. 新增：屏幕分屏渲染逻辑
-    // --------------------------------------------------------
-    if(display_mode == 0)
-    {
-        // 模式0：显示归一化值 (Norm 0 ~ 128)
-        ips200_show_string(0, 16*0, "--- Mode: NORM ---"); 
-        ips200_show_string(0, 16*1, "L1_Norm: "); ips200_show_float(72, 16*1, L1_norm, 3, 1);     
-        ips200_show_string(0, 16*2, "L2_Norm: "); ips200_show_float(72, 16*2, L2_norm, 3, 1);     
-        ips200_show_string(0, 16*3, "L3_Norm: "); ips200_show_float(72, 16*3, L3_norm, 3, 1);     
-        ips200_show_string(0, 16*4, "L4_Norm: "); ips200_show_float(72, 16*4, L4_norm, 3, 1);     
-    }
-    else
-    {
-        // 模式1：显示底层原始 ADC 值 (Raw)
-        ips200_show_string(0, 16*0, "--- Mode: RAW  ---"); 
-        ips200_show_string(0, 16*1, "L1_Raw : "); ips200_show_int32(72, 16*1, L1_raw, 3);     
-        ips200_show_string(0, 16*2, "L2_Raw : "); ips200_show_int32(72, 16*2, L2_raw, 3);     
-        ips200_show_string(0, 16*3, "L3_Raw : "); ips200_show_int32(72, 16*3, L3_raw, 3);     
-        ips200_show_string(0, 16*4, "L4_Raw : "); ips200_show_int32(72, 16*4, L4_raw, 3);     
-    }
+//    // --------------------------------------------------------
+//    // 3. 新增：屏幕分屏渲染逻辑
+//    // --------------------------------------------------------
+//    if(display_mode == 0)
+//    {
+//        // 模式0：显示归一化值 (Norm 0 ~ 128)
+//        ips200_show_string(0, 16*0, "--- Mode: NORM ---"); 
+//        ips200_show_string(0, 16*1, "L1_Norm: "); ips200_show_float(72, 16*1, L1_norm, 3, 1);     
+//        ips200_show_string(0, 16*2, "L2_Norm: "); ips200_show_float(72, 16*2, L2_norm, 3, 1);     
+//        ips200_show_string(0, 16*3, "L3_Norm: "); ips200_show_float(72, 16*3, L3_norm, 3, 1);     
+//        ips200_show_string(0, 16*4, "L4_Norm: "); ips200_show_float(72, 16*4, L4_norm, 3, 1);     
+//    }
+//    else
+//    {
+//        // 模式1：显示底层原始 ADC 值 (Raw)
+//        ips200_show_string(0, 16*0, "--- Mode: RAW  ---"); 
+//        ips200_show_string(0, 16*1, "L1_Raw : "); ips200_show_int32(72, 16*1, L1_raw, 3);     
+//        ips200_show_string(0, 16*2, "L2_Raw : "); ips200_show_int32(72, 16*2, L2_raw, 3);     
+//        ips200_show_string(0, 16*3, "L3_Raw : "); ips200_show_int32(72, 16*3, L3_raw, 3);     
+//        ips200_show_string(0, 16*4, "L4_Raw : "); ips200_show_int32(72, 16*4, L4_raw, 3);     
+//    }
 
-    // --------------------------------------------------------
-    // 4. 新增：把陀螺仪核心数据挂在最下方，方便随时查看
-    // --------------------------------------------------------
-    ips200_show_string(0, 16*6, "Angle Z: "); 
-    ips200_show_float(72, 16*6, angle_z, 4, 1);       // 实时显示绝对角度
-    
-    ips200_show_string(0, 16*7, "Gyro  Z: "); 
-    ips200_show_float(72, 16*7, true_gyro_z, 4, 1);   // 实时角速度，晃动车身看它跳动
-	
-	// 【新增的 Y 轴屏幕打印】
-    // 你可以用手猛烈抬起车头，看看这个数字会不会瞬间飙升到 150 以上！
-    ips200_show_string(0, 16*8, "Gyro  X: "); 
-    ips200_show_float(72, 16*8, true_gyro_x, 4, 1);
-	
-   // sprintf(buf, "duty_L:%d error_L:%.2f duty_R:%d error_R:%.2f\r\n", duty_L, error_L, duty_R, error_R);
-   // wireless_uart_send_string(buf);
+//    // --------------------------------------------------------
+//    // 4. 新增：把陀螺仪核心数据挂在最下方，方便随时查看
+//    // --------------------------------------------------------
+//    ips200_show_string(0, 16*6, "Angle Z: "); 
+//    ips200_show_float(72, 16*6, angle_z, 4, 1);       // 实时显示绝对角度
+//    
+//    ips200_show_string(0, 16*7, "Gyro  Z: "); 
+//    ips200_show_float(72, 16*7, true_gyro_z, 4, 1);   // 实时角速度，晃动车身看它跳动
+//	
+//	// 【新增的 Y 轴屏幕打印】
+//    // 你可以用手猛烈抬起车头，看看这个数字会不会瞬间飙升到 150 以上！
+//    ips200_show_string(0, 16*8, "Gyro  X: "); 
+//    ips200_show_float(72, 16*8, true_gyro_x, 4, 1);
+//	
+//   // sprintf(buf, "duty_L:%d error_L:%.2f duty_R:%d error_R:%.2f\r\n", duty_L, error_L, duty_R, error_R);
+//   // wireless_uart_send_string(buf);
 
 }
