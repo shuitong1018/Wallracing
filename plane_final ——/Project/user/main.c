@@ -63,9 +63,9 @@ int16 edata left_encoder_data = 0;                                              
 
 uint16 action_timer = 0;
 
-const float Kp_L = 6.5, Kd_L = 5;                                      					// 左电机 PID 控制参数
-const float Kp_R = 6.0, Kd_R = 5;                                                     // 右电机 PID 控制参数
-const float KF_L = 15.4,KF_R =15.6;
+const float Kp_L = 12, Kd_L = 15;                                      					// 左电机 PID 控制参数
+const float Kp_R = 11.5, Kd_R = 16;                                                     // 右电机 PID 控制参数
+const float KF_L = 14.5,KF_R =14.6;
 /* 上一周期的（测量-目标）误差，用于计算微分项（delta error） */
 float edata prev_e_L = 0.0f, prev_e_R = 0.0f;
 
@@ -74,9 +74,9 @@ const float target_speed = 1.7;                                                 
 float edata target_speed_L = 0,target_speed_R = 0;                              // 左右轮目标速度变量，单位为m/s   
 
 // 方向PID参数
-const float Kp1_dir = 0.0006f;
-const float Kp2_dir = 0.000052f;
-const float Kd_dir = 0.01f;
+const float Kp1_dir = 0.0008f;
+const float Kp2_dir = 0.00009f;
+const float Kd_dir = 0.045f;
 float edata prev_e_dir = 0.0f;
 float edata dir_output = 0.0f;           
 
@@ -273,13 +273,20 @@ void patrol_line() {
 	pit_hanlder();
     dir_get(); 
 	
-	//发车保护锁
-	if (car_running == 0) {
-        pwm_set_duty(PWM_L, 0); // 强制左轮断电
-        pwm_set_duty(PWM_R, 0); // 强制右轮断电
-        pwm_set_duty(PWM_PIN, 0); // 强制 风扇 断电
-        return; // 直接 return！不执行后面的路径识别和 PID 算力！
-    }
+	// 发车保护锁
+if (car_running == 0) {
+    pwm_set_duty(PWM_L, 0); 
+    pwm_set_duty(PWM_R, 0); 
+    pwm_set_duty(PWM_PIN, 0); // 彻底停车，全部断电
+    return; 
+} 
+else if (car_running == 1) {
+    // 正在缓启动风扇，强制锁住左右轮，但【不要】关风扇 PWM_PIN
+    pwm_set_duty(PWM_L, 0); 
+    pwm_set_duty(PWM_R, 0); 
+    return; 
+}
+// 只有 car_running == 2 时，才会往下执行
     
     // 丢线保护
     if (L1_norm < 5 && L2_norm < 5 && L3_norm < 5 && L4_norm < 5) {
@@ -462,7 +469,7 @@ void pwm_soft_start(pwm_channel_enum pin, uint32 target_duty, uint16 step, uint1
     uint32 duty;
 
     pwm_set_duty(pin, 0);
-    for (duty = 0; duty < target_duty; duty += step)
+    for (duty = 800; duty < target_duty; duty += step)
     {
         pwm_set_duty(pin, duty);
         system_delay_ms(interval_ms);
@@ -501,24 +508,38 @@ void data_show(){
 //    }
 
 	if(gpio_get_level(RUN_KEY_PIN) == 0)            
+{
+    system_delay_ms(20); // 消抖 
+    if(gpio_get_level(RUN_KEY_PIN) == 0)        
     {
-        system_delay_ms(20); // 消抖 
-        if(gpio_get_level(RUN_KEY_PIN) == 0)        
-        {
-            if (car_running == 0) {
-                // 停车 -> 起跑：先缓启动风扇，风扇完全启动后再开始气跑
-                pwm_soft_start(PWM_PIN, MOTOR_SPEED_DUTY, 100, 10);  // 阻塞等待缓启动完成
-                car_running = 1;  // 风扇启动完成后才设置运行状态
-            } else {
-                // 起跑 -> 停车：关闭车子和风扇
-                car_running = 0;
-                pwm_set_duty(PWM_PIN, 0); 
-            }
-			
-            ips200_clear(RGB565_BLACK); // 刷清屏幕防止文字重叠
-            while(gpio_get_level(RUN_KEY_PIN) == 0); // 等待松手 
+        if (car_running == 0) {
+            // 1. 设置为 1，告诉中断：“我要缓启动了，别把风扇关了，但轮子依然锁住”
+            car_running = 1; 
+            
+            // 2. 真正的缓启动，此时中断不会来捣乱了
+            pwm_soft_start(PWM_PIN, MOTOR_SPEED_DUTY, 100, 10);  
+            
+            // 3. 清除所有历史积累的“脏数据”，防止起步瞬间PID爆炸
+            encoder_clear_count(ENCODER_R);
+            encoder_clear_count(ENCODER_L);
+            prev_e_L = 0.0f; 
+            prev_e_R = 0.0f;
+            prev_e_dir = 0.0f;
+            angle_z = 0.0f;     // 清零陀螺仪积分
+            lost_line_timer = 0; // 清除丢线计时
+
+            // 4. 正式放开发车权限
+            car_running = 2;  
+        } else {
+            // 停车逻辑
+            car_running = 0;
+            pwm_set_duty(PWM_PIN, 0); 
         }
+        
+        ips200_clear(RGB565_BLACK); 
+        while(gpio_get_level(RUN_KEY_PIN) == 0); 
     }
+}
 	
 //    // --------------------------------------------------------
 //    // 3. 新增：屏幕分屏渲染逻辑
