@@ -63,9 +63,9 @@ int16 edata left_encoder_data = 0;                                              
 
 uint16 action_timer = 0;
 
-const float Kp_L = 12, Kd_L = 15;                                      					// 左电机 PID 控制参数
-const float Kp_R = 11.5, Kd_R = 16;                                                     // 右电机 PID 控制参数
-const float KF_L = 14.5,KF_R =14.6;
+const float Kp_L = 11.8, Kd_L = 15;                                      					// 左电机 PID 控制参数
+const float Kp_R = 11.3, Kd_R = 16;                                                     // 右电机 PID 控制参数
+const float KF_L = 14.3,KF_R =14.4;
 /* 上一周期的（测量-目标）误差，用于计算微分项（delta error） */
 float edata prev_e_L = 0.0f, prev_e_R = 0.0f;
 
@@ -75,8 +75,8 @@ float edata target_speed_L = 0,target_speed_R = 0;                              
 
 // 方向PID参数
 const float Kp1_dir = 0.0008f;
-const float Kp2_dir = 0.00009f;
-const float Kd_dir = 0.045f;
+const float Kp2_dir = 0.000091f;
+const float Kd_dir = 0.063f;
 float edata prev_e_dir = 0.0f;
 float edata dir_output = 0.0f;           
 
@@ -217,7 +217,7 @@ void main(void)
 {
     System_Init();
     ips200_set_color(RGB565_WHITE, RGB565_BLACK);
-
+    adc_init(ADC_CH5_P15, ADC_8BIT);//测电池电压
     pwm_init(PWM_PIN, PWM_FREQ, 0);
     pwm_set_duty(PWM_PIN, 0);                          // 初始化风扇为关闭状态
 
@@ -294,6 +294,7 @@ else if (car_running == 1) {
         if (lost_line_timer > 100) { 
             target_speed_L = 0;
             target_speed_R = 0;
+					  pwm_set_duty(PWM_PIN,0);
             speed_control();
             return; 
         }
@@ -478,10 +479,58 @@ void pwm_soft_start(pwm_channel_enum pin, uint32 target_duty, uint16 step, uint1
 }
 
 void data_show(){
+//   static uint16 voltage_print_timer = 0;
     char buf[128];
+//    uint16 adc_p15_value;
+//    float v_p15;
+//    float battery_voltage;
 
-    // 格式化并通过无线串口发送
-    sprintf(buf, "%.2f,%.2f,%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.003518,target_speed_R,target_speed_L,dir_output);
+    if(gpio_get_level(RUN_KEY_PIN) == 0)            
+    {
+        system_delay_ms(20); // 消抖 
+        if(gpio_get_level(RUN_KEY_PIN) == 0)        
+        {
+            if (car_running == 0) {
+                // 1. 设置为 1，告诉中断：“我要缓启动了，别把风扇关了，但轮子依然锁住”
+                car_running = 1; 
+                
+                // 2. 真正的缓启动，此时中断不会来捣乱了
+                pwm_soft_start(PWM_PIN, MOTOR_SPEED_DUTY, 100, 10);  
+                
+                // 3. 清除所有历史积累的“脏数据”，防止起步瞬间PID爆炸
+                encoder_clear_count(ENCODER_R);
+                encoder_clear_count(ENCODER_L);
+                prev_e_L = 0.0f; 
+                prev_e_R = 0.0f;
+                prev_e_dir = 0.0f;
+                angle_z = 0.0f;     // 清零陀螺仪积分
+                lost_line_timer = 0; // 清除丢线计时
+
+                // 4. 正式放开发车权限
+                car_running = 2;  
+            } else {
+                // 停车逻辑
+                car_running = 0;
+                pwm_set_duty(PWM_PIN, 0); 
+            }
+            
+            ips200_clear(RGB565_BLACK); 
+            while(gpio_get_level(RUN_KEY_PIN) == 0); 
+        }
+    }
+
+//    // 读取 P15 的 ADC 数据
+//    adc_p15_value = adc_convert(ADC_CH5_P15);
+//    v_p15 = (float)adc_p15_value * 3.3 / 255.0f;
+//    battery_voltage = v_p15 * 11.0f;
+
+//    if (++voltage_print_timer >= 5) {
+//        voltage_print_timer = 0;
+//        sprintf(buf, "%.2f\r\n", battery_voltage);
+//        wireless_uart_send_string(buf);
+//    }
+
+   sprintf(buf, "%.2f,%.2f,%.2f,%.2f,%.2f\r\n", right_encoder_data*0.003518, left_encoder_data*0.003518,target_speed_R,target_speed_L,dir_output);
 //    sprintf(buf, "%.1f,%.1f,%.1f,%.1f,%.2f,%.2f\n", 
 //            L1_norm, 
 //            L2_norm, 
@@ -489,9 +538,8 @@ void data_show(){
 //            L4_norm, 
 //            true_gyro_z, 
 //            true_gyro_x);
-
-	wireless_uart_send_string(buf);
-
+     wireless_uart_send_string(buf);
+		 
 //	// 2. 新增：按键扫描与状态切换
 //    // --------------------------------------------------------
 //    if(gpio_get_level(KEY_PIN) == 0)            
@@ -506,40 +554,6 @@ void data_show(){
 //            while(gpio_get_level(KEY_PIN) == 0); 
 //        }
 //    }
-
-	if(gpio_get_level(RUN_KEY_PIN) == 0)            
-{
-    system_delay_ms(20); // 消抖 
-    if(gpio_get_level(RUN_KEY_PIN) == 0)        
-    {
-        if (car_running == 0) {
-            // 1. 设置为 1，告诉中断：“我要缓启动了，别把风扇关了，但轮子依然锁住”
-            car_running = 1; 
-            
-            // 2. 真正的缓启动，此时中断不会来捣乱了
-            pwm_soft_start(PWM_PIN, MOTOR_SPEED_DUTY, 100, 10);  
-            
-            // 3. 清除所有历史积累的“脏数据”，防止起步瞬间PID爆炸
-            encoder_clear_count(ENCODER_R);
-            encoder_clear_count(ENCODER_L);
-            prev_e_L = 0.0f; 
-            prev_e_R = 0.0f;
-            prev_e_dir = 0.0f;
-            angle_z = 0.0f;     // 清零陀螺仪积分
-            lost_line_timer = 0; // 清除丢线计时
-
-            // 4. 正式放开发车权限
-            car_running = 2;  
-        } else {
-            // 停车逻辑
-            car_running = 0;
-            pwm_set_duty(PWM_PIN, 0); 
-        }
-        
-        ips200_clear(RGB565_BLACK); 
-        while(gpio_get_level(RUN_KEY_PIN) == 0); 
-    }
-}
 	
 //    // --------------------------------------------------------
 //    // 3. 新增：屏幕分屏渲染逻辑
