@@ -33,7 +33,7 @@ void Path_Identify(void) {
     // 状态分支 1：当前已经是十字模式，专心处理十字的退出
     if (current_path_type == PATH_CROSS) {
         path_timer++;
-        if (path_timer > 60) {
+        if (path_timer > 1) {
             current_path_type = PATH_NORMAL;
             path_timer = 0; // 退出时清零
         }

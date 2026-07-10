@@ -9,12 +9,15 @@
 #define LED1               (IO_P52)
 
 // 【新增 1】：按键引脚与屏幕模式变量
-#define KEY_PIN            (IO_P70)
+#define KEY_PIN            (IO_P63)
 uint8 display_mode = 0; // 0代表显示Norm归一化值，1代表显示Raw原始值
 
 // 定义发车按键和状态变量 
-#define RUN_KEY_PIN        (IO_P71)      // 发车/停车按键
-uint8 car_running = 0;                   // 0: 停车看数据状态, 1: 狂飙状态
+#define RUN_KEY_PIN        (IO_P47)      // 发车/停车按键
+uint8 car_running = 0;                   // 0: 停车看数据状态, 1: 缓启动中, 2: 正常行驶
+volatile uint8 start_button_pressed_flag = 0;
+volatile uint8 startup_complete_flag = 0;
+static uint8 run_key_last_state = 1;
 
 #define PWM_R              (PWMA_CH4P_P26)                                     // 右电机 PWM 控制引脚定义
 #define DIR_R              (IO_P51)                                            // 右电机方向控制引脚定义
@@ -36,7 +39,17 @@ uint8 car_running = 0;                   // 0: 停车看数据状态, 1: 狂飙状态
 #define PWM_PIN            (PWMB_CH3_P33)              // 使用P33引脚
 #define MOTOR_SPEED_DUTY   (4000)                      // 固定转速占空比（0-10000）
 
-#define DATA_SIZE 800
+#define KF_L_Plane 14.3f
+#define KF_R_Plane 14.4f
+#define KF_L_up 21.3f
+#define KF_R_up 21.4f
+#define KF_L_down 0.3f
+#define KF_R_down 0.4f
+#define KF_L_wall 2.3f
+#define KF_R_wall 2.4f
+#define Kp2_dir_Plane 0.000075f
+
+//#define DATA_SIZE 800
 
 //typedef struct {
 //    int16 left_encoder;
@@ -63,22 +76,25 @@ int16 edata left_encoder_data = 0;                                              
 
 uint16 action_timer = 0;
 
-const float Kp_L = 11.8, Kd_L = 15;                                      					// 左电机 PID 控制参数
-const float Kp_R = 11.3, Kd_R = 16;                                                     // 右电机 PID 控制参数
-const float KF_L = 14.3,KF_R =14.4;
+const float Kp_L = 11.8f, Kd_L = 15.0f;                                       						// 左电机 PID 控制参数
+const float Kp_R = 11.3f, Kd_R = 16.0f;                                                     // 右电机 PID 控制参数
+float KF_L = 14.3f, KF_R = 14.4f;
 /* 上一周期的（测量-目标）误差，用于计算微分项（delta error） */
 float edata prev_e_L = 0.0f, prev_e_R = 0.0f;
 
 
-const float target_speed = 1.7;                                                 // 目标速度变量，单位为m/s
-float edata target_speed_L = 0,target_speed_R = 0;                              // 左右轮目标速度变量，单位为m/s   
+const float target_speed = 1.7f;                                                 // 目标速度变量，单位为m/s
+float edata target_speed_L = 0.0f, target_speed_R = 0.0f;                              // 左右轮目标速度变量，单位为m/s   
 
 // 方向PID参数
 const float Kp1_dir = 0.0008f;
-const float Kp2_dir = 0.000091f;
+float Kp2_dir = Kp2_dir_Plane;  // 根据不同路况动态调整
 const float Kd_dir = 0.063f;
 float edata prev_e_dir = 0.0f;
-float edata dir_output = 0.0f;           
+float edata dir_output = 0.0f;  
+
+//动态调整负压风扇标志位
+static uint8 fan_pwm_high = 1;
 
 // ================= 陀螺仪全局变量 =================
 float gyro_z_offset = 0.0f; // Z轴静态零偏
@@ -196,6 +212,7 @@ void speed_out();
 
 //调试函数声明
 void data_show();
+static void check_start_button(void);
 
 //转向环相关函数声明
 void dir_get();
@@ -216,8 +233,8 @@ void patrol_line();
 void main(void)
 {
     System_Init();
-    ips200_set_color(RGB565_WHITE, RGB565_BLACK);
-    adc_init(ADC_CH5_P15, ADC_8BIT);//测电池电压
+    //ips200_set_color(RGB565_WHITE, RGB565_BLACK);
+    //adc_init(ADC_CH5_P15, ADC_8BIT);//测电池电压
     pwm_init(PWM_PIN, PWM_FREQ, 0);
     pwm_set_duty(PWM_PIN, 0);                          // 初始化风扇为关闭状态
 
@@ -226,6 +243,31 @@ void main(void)
 	
     while(1)
     {
+        if (start_button_pressed_flag) {
+            start_button_pressed_flag = 0;
+
+            if (car_running == 0) {
+                car_running = 1;
+
+                pwm_soft_start(PWM_PIN, MOTOR_SPEED_DUTY, 100, 10);
+
+                encoder_clear_count(ENCODER_R);
+                encoder_clear_count(ENCODER_L);
+                prev_e_L = 0.0f;
+                prev_e_R = 0.0f;
+                prev_e_dir = 0.0f;
+                angle_z = 0.0f;
+                lost_line_timer = 0;
+
+                startup_complete_flag = 1;
+            } else {
+                car_running = 0;
+                pwm_set_duty(PWM_PIN, 0);
+            }
+
+            ips200_clear(RGB565_BLACK);
+        }
+
         data_show();
         system_delay_ms(5);
     }
@@ -247,6 +289,27 @@ void dir_calculate(void) {
     // 2. 然后再进行赋值和计算
     e = error_value;
     abs_e = (e >= 0) ? e : -e;
+
+    if(imu660rb_acc_y > 700 && imu660rb_acc_x < 500){
+        KF_L = KF_L_up;
+        KF_R = KF_R_up;
+        Kp2_dir = 0.000068f;
+    }
+    else if(imu660rb_acc_y < -500){
+        KF_L = KF_L_down;
+        KF_R = KF_R_down;
+        Kp2_dir = 0.000099f;
+    }
+    else if(imu660rb_acc_x < -1000 || imu660rb_acc_x > 1000){
+        KF_L = KF_L_wall;
+        KF_R = KF_R_wall;
+        Kp2_dir = 0.000105f;
+    }
+    else{
+        KF_L = KF_L_Plane;
+        KF_R = KF_R_Plane;
+        Kp2_dir = Kp2_dir_Plane;
+    }
 
     dir_output = Kp1_dir * e + Kp2_dir * e * abs_e + Kd_dir * (e - prev_e_dir);
     
@@ -270,6 +333,12 @@ void patrol_line() {
     // 1. 动态基础速度：默认使用直道速度 1.7m/s
     float active_speed = target_speed; 
 	
+	check_start_button();
+    if (startup_complete_flag) {
+        startup_complete_flag = 0;
+        car_running = 2;
+    }
+
 	pit_hanlder();
     dir_get(); 
 	
@@ -304,11 +373,15 @@ else if (car_running == 1) {
 
     Path_Identify(); 
 
+    // path.c 在检测到进入 PATH_CROSS 时已清零 angle_z，此处不再重复清零
+
     // ================= 路径决策分支 =================
 
     if (current_path_type == PATH_CROSS) {
         //高级版 - 用陀螺仪压制转向
         dir_output = angle_z * 0.05f; // 如果车头偏了，产生反向抵抗力
+        if (dir_output > 1.0f) dir_output = 1.0f;
+        if (dir_output < -1.0f) dir_output = -1.0f;
     }
 
     else if (current_path_type == PATH_ROUNDABOUT) {
@@ -332,13 +405,13 @@ else if (car_running == 1) {
         }
         else if (round_step == ROUND_IN) {
             if (round_direction == 1) {
-                dir_output = -4.0f; 
+                dir_output = -1.4f; 
                 // 【陀螺仪接管】：不用管时间，车头只要实打实地转了 45 度，立马结束入环！
                 if (angle_z > 45.0f) { 
                     round_step = ROUND_MID; 
                 }
             } else {
-                dir_output = 3.5f; 
+                dir_output = 1.4f; 
                 if (angle_z < -45.0f) { 
                     round_step = ROUND_MID; 
                 }
@@ -370,6 +443,20 @@ else if (car_running == 1) {
 		last_stable_dir = dir_output;
     }
     
+    
+
+    if (fan_pwm_high) {
+        if (imu660rb_acc_z < -1200 || imu660rb_acc_z > 1200) {
+            fan_pwm_high = 0;
+            pwm_set_duty(PWM_PIN, 4000);
+        }
+    } else {
+        if (imu660rb_acc_z > -800 && imu660rb_acc_z < 800) {
+            fan_pwm_high = 1;
+            pwm_set_duty(PWM_PIN, 6000);
+        }
+    }
+
     target_speed_L = active_speed - dir_output;
     target_speed_R = active_speed + dir_output;
 
@@ -386,6 +473,12 @@ else if (car_running == 1) {
     } 
     else {
         P52 = 1; 
+    }
+
+    if (current_path_type == PATH_CROSS) {
+        P70 = 0;
+    } else {
+        P70 = 1;
     }
 }
 	
@@ -478,46 +571,31 @@ void pwm_soft_start(pwm_channel_enum pin, uint32 target_duty, uint16 step, uint1
     pwm_set_duty(pin, target_duty);
 }
 
+static void check_start_button(void)
+{
+    uint8 key_level = gpio_get_level(RUN_KEY_PIN);
+
+    if (key_level == 0) {
+        P52 = 0;  // 按下时点亮 LED
+
+        if (run_key_last_state != 0) {
+            run_key_last_state = 0;
+            if (start_button_pressed_flag == 0) {
+                start_button_pressed_flag = 1;
+            }
+        }
+    } else {
+        P52 = 1;  // 松开时熄灭
+        run_key_last_state = 1;
+    }
+}
+
 void data_show(){
 //   static uint16 voltage_print_timer = 0;
     char buf[128];
 //    uint16 adc_p15_value;
 //    float v_p15;
 //    float battery_voltage;
-
-    if(gpio_get_level(RUN_KEY_PIN) == 0)            
-    {
-        system_delay_ms(20); // 消抖 
-        if(gpio_get_level(RUN_KEY_PIN) == 0)        
-        {
-            if (car_running == 0) {
-                // 1. 设置为 1，告诉中断：“我要缓启动了，别把风扇关了，但轮子依然锁住”
-                car_running = 1; 
-                
-                // 2. 真正的缓启动，此时中断不会来捣乱了
-                pwm_soft_start(PWM_PIN, MOTOR_SPEED_DUTY, 100, 10);  
-                
-                // 3. 清除所有历史积累的“脏数据”，防止起步瞬间PID爆炸
-                encoder_clear_count(ENCODER_R);
-                encoder_clear_count(ENCODER_L);
-                prev_e_L = 0.0f; 
-                prev_e_R = 0.0f;
-                prev_e_dir = 0.0f;
-                angle_z = 0.0f;     // 清零陀螺仪积分
-                lost_line_timer = 0; // 清除丢线计时
-
-                // 4. 正式放开发车权限
-                car_running = 2;  
-            } else {
-                // 停车逻辑
-                car_running = 0;
-                pwm_set_duty(PWM_PIN, 0); 
-            }
-            
-            ips200_clear(RGB565_BLACK); 
-            while(gpio_get_level(RUN_KEY_PIN) == 0); 
-        }
-    }
 
 //    // 读取 P15 的 ADC 数据
 //    adc_p15_value = adc_convert(ADC_CH5_P15);
